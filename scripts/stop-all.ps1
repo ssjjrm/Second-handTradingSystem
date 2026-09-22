@@ -1,23 +1,27 @@
-﻿# stop-all.ps1 — 停止本项目启动的四个服务
+﻿# stop-all.ps1 — 停止后端 / AI / 前端三个应用进程
 #
 # 用法：powershell -ExecutionPolicy Bypass -File scripts\stop-all.ps1
-# 注意：MySQL 只停「我们自己的 3307 实例」，绝不碰系统自带的 MySQL80（3306）。
+#
+# 重要：本脚本**不动 MySQL**。
+#   3306 是系统自带的 MySQL80 服务，随 Windows 开机自启，属于基础设施，不该被脚本随手关掉。
+#   真要停它需要管理员权限，请手动执行：
+#       （管理员 PowerShell）net stop MySQL80
+#   要停也请在确认没有别的项目在用这个数据库之后再停。
 
 . "$PSScriptRoot\env.ps1"
 
-Write-Host "`n停止服务..." -ForegroundColor Cyan
+Write-Host "`n停止应用进程..." -ForegroundColor Cyan
 
-# ---------- 1. 前端 / 后端 / AI：按端口找进程并结束 ----------
 foreach ($port in @($WEB_PORT, $BACKEND_PORT, $AI_PORT)) {
     $conns = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue
     if ($conns) {
         foreach ($pid_ in ($conns.OwningProcess | Sort-Object -Unique)) {
             try {
                 $p = Get-Process -Id $pid_ -ErrorAction Stop
-                Write-Host ("  停止 {0} (PID {1}) 占用端口 {2}" -f $p.ProcessName, $pid_, $port) -ForegroundColor Yellow
+                Write-Host ("  停止 {0} (PID {1})，它占用了端口 {2}" -f $p.ProcessName, $pid_, $port) -ForegroundColor Yellow
                 Stop-Process -Id $pid_ -Force
             } catch {
-                Write-Host ("  端口 {0} 的进程 {1} 已退出" -f $port, $pid_) -ForegroundColor DarkGray
+                Write-Host ("  端口 {0} 上的进程 {1} 已退出" -f $port, $pid_) -ForegroundColor DarkGray
             }
         }
     } else {
@@ -25,20 +29,14 @@ foreach ($port in @($WEB_PORT, $BACKEND_PORT, $AI_PORT)) {
     }
 }
 
-# ---------- 2. MySQL：优雅关闭我们自己的实例 ----------
-if (Test-Port $DB_PORT) {
-    Write-Host "  关闭专用 MySQL 实例（3307）..." -ForegroundColor Yellow
-    $mysqladmin = Join-Path $MYSQL_BIN 'mysqladmin.exe'
-    & $mysqladmin --no-defaults -h127.0.0.1 "-P$DB_PORT" "-u$DB_USER" "-p$DB_PASS" shutdown 2>&1 |
-        Where-Object { $_ -notmatch 'Using a password' }
-    Start-Sleep -Seconds 2
-    if (Test-Port $DB_PORT) {
-        Write-Host "  优雅关闭未生效，强制结束 mysqld 进程" -ForegroundColor Yellow
-        Get-Process mysqld -ErrorAction SilentlyContinue | Stop-Process -Force
+# mvn spring-boot:run 会挂一个 java 子进程；杀掉 8080 的监听者后，
+# 父进程可能还在，这里顺手清掉残留的 java 进程（它们只可能是本项目的后端）。
+$leftover = Get-Process java -ErrorAction SilentlyContinue
+if ($leftover) {
+    foreach ($j in $leftover) {
+        Write-Host ("  清理残留 java 进程 (PID {0})" -f $j.Id) -ForegroundColor DarkGray
+        Stop-Process -Id $j.Id -Force -ErrorAction SilentlyContinue
     }
-    Write-Host "  MySQL 已停止" -ForegroundColor Green
-} else {
-    Write-Host "  MySQL(3307) 本就未运行" -ForegroundColor DarkGray
 }
 
-Write-Host "`n全部停止完成。系统自带的 MySQL80(3306) 未受影响。`n" -ForegroundColor Cyan
+Write-Host "`n应用已停止。MySQL(3306) 仍在运行（这是对的，它随开机自启）。`n" -ForegroundColor Cyan
