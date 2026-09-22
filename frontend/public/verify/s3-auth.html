@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>S3 用户模块 - 接口验证</title>
+  <style>
+    body { font-family: Consolas, monospace; margin: 20px; max-width: 1200px; }
+    fieldset { margin-bottom: 16px; padding: 12px; border: 1px solid #ccc; }
+    legend { font-weight: bold; }
+    input, select { margin: 4px; padding: 4px; }
+    button { margin: 4px; padding: 6px 14px; cursor: pointer; }
+    pre { background: #f5f5f5; padding: 10px; max-height: 420px; overflow: auto; }
+    .ok { color: #2e7d32; font-weight: bold; }
+    .bad { color: #c62828; font-weight: bold; }
+    .hint { color: #666; font-size: 13px; }
+    code { background: #eee; padding: 1px 4px; }
+  </style>
+</head>
+<body>
+  <h1>S3 用户模块 · 接口验证</h1>
+  <p class="hint">
+    打开方式：<b>http://localhost:5174/verify/s3-auth.html</b>（必须先启动前端 dev server）<br>
+    为什么不能双击打开：<code>file://</code> 和 <code>localhost:5174</code> 的 localStorage 是隔离的，
+    双击打开就<strong>读不到登录页存的 token</strong>。
+  </p>
+  <p>登录态：<code id="stat">检查中…</code></p>
+
+  <fieldset>
+    <legend>1. 登录　POST /api/auth/login</legend>
+    用户名 <input id="u" value="admin" size="12">
+    密码 <input id="p" value="admin123" size="12">
+    <button onclick="doLogin()">登录</button>
+    <button onclick="fill('student01','123456')">student01</button>
+    <button onclick="fill('buyer01','123456')">buyer01</button>
+    <span class="hint">期望：HTTP 200，返回 token，并自动存进 localStorage</span>
+  </fieldset>
+
+  <fieldset>
+    <legend>2. 当前用户信息　GET /api/auth/me</legend>
+    <button onclick="call('GET','/api/auth/me')">请求</button>
+    <span class="hint">期望：200，含 phone / hasContact / stats</span>
+  </fieldset>
+
+  <fieldset>
+    <legend>3. 修改资料　PUT /api/auth/profile</legend>
+    昵称 <input id="nick" placeholder="新昵称" size="14">
+    <button onclick="upProfile()">只改昵称</button>
+    <button onclick="call('PUT','/api/auth/profile',{wechat:''})">清空微信</button>
+    <button onclick="call('PUT','/api/auth/profile',{wechat:'',qq:''})">微信QQ都清空（应 400）</button>
+  </fieldset>
+
+  <fieldset>
+    <legend>4. 修改密码　PUT /api/auth/password</legend>
+    原密码 <input id="op" value="123456" size="10">
+    新密码 <input id="np" value="654321" size="10">
+    <button onclick="upPwd()">修改</button>
+    <span class="hint">期望：原密码错 → 400「原密码错误」</span>
+  </fieldset>
+
+  <fieldset>
+    <legend>5. 未登录 / 坏 token</legend>
+    <button onclick="call('GET','/api/auth/me',null,{noToken:true})">不带 token（应 401）</button>
+    <button onclick="call('GET','/api/auth/me',null,{badToken:true})">乱造 token（应 401）</button>
+    <button onclick="logout()">清除本地登录态</button>
+  </fieldset>
+
+  <h3>响应</h3>
+  <pre id="out">（点上面的按钮）</pre>
+
+<script>
+// 相对路径 —— 页面本身就跑在 5174 上，/api 由 vite 代理转发到后端 8081
+const BASE = '';
+const out = document.getElementById('out');
+
+function token() { return localStorage.getItem('token') || ''; }
+
+function refreshStat() {
+  const el = document.getElementById('stat');
+  const t = token();
+  const u = localStorage.getItem('user');
+  if (t) {
+    el.textContent = `已登录（token 长度 ${t.length}）` + (u ? '　user=' + u : '');
+    el.className = 'ok';
+  } else {
+    el.textContent = '未登录 —— 请先在「1. 登录」里登录，或去 /login 页面登录';
+    el.className = 'bad';
+  }
+}
+
+async function call(method, url, body, opts = {}) {
+  out.textContent = `→ ${method} ${url}${body ? '  body=' + JSON.stringify(body) : ''}\n\n`;
+  const headers = { 'Content-Type': 'application/json' };
+  if (!opts.noToken) {
+    const t = opts.badToken ? 'abc.def.ghi' : token();
+    if (t) headers.Authorization = 'Bearer ' + t;
+  }
+  try {
+    const res = await fetch(BASE + url, {
+      method,
+      headers,
+      body: body ? JSON.stringify(body) : undefined
+    });
+    const text = await res.text();
+    let pretty = text;
+    try { pretty = JSON.stringify(JSON.parse(text), null, 2); } catch (e) {}
+    out.textContent += `← HTTP ${res.status}\n\n` + pretty;
+  } catch (e) {
+    out.textContent += '❌ 请求失败：' + e.message + '\n\n（前端 5174 起来了吗？）';
+  }
+}
+
+async function doLogin() {
+  const username = document.getElementById('u').value;
+  const password = document.getElementById('p').value;
+
+  out.textContent = `→ POST /api/auth/login  {"username":"${username}"}\n\n`;
+  try {
+    const res = await fetch(BASE + '/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
+    const json = await res.json();
+    out.textContent += `← HTTP ${res.status}\n\n` + JSON.stringify(json, null, 2);
+
+    if (json.code === 200 && json.data?.token) {
+      localStorage.setItem('token', json.data.token);
+      localStorage.setItem('user', JSON.stringify(json.data.user));
+      out.textContent += '\n\n✅ 已把 token 写入 localStorage（S4~S9 的验证页会自动复用）';
+      refreshStat();
+    }
+  } catch (e) {
+    out.textContent += '❌ 请求失败：' + e.message;
+  }
+}
+
+function fill(u, p) {
+  document.getElementById('u').value = u;
+  document.getElementById('p').value = p;
+}
+
+function upProfile() {
+  call('PUT', '/api/auth/profile', { nickname: document.getElementById('nick').value || '改个名' });
+}
+
+function upPwd() {
+  call('PUT', '/api/auth/password', {
+    oldPassword: document.getElementById('op').value,
+    newPassword: document.getElementById('np').value
+  });
+}
+
+function logout() {
+  localStorage.removeItem('token');
+  localStorage.removeItem('user');
+  out.textContent = '已清除本地 token 和 user';
+  refreshStat();
+}
+
+refreshStat();
+</script>
+</body>
+</html>

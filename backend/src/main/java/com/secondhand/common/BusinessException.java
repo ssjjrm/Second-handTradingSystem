@@ -19,8 +19,17 @@ public class BusinessException extends RuntimeException {
 
     private final Integer code;
 
+    /**
+     * 不传 code 时默认为 <b>400（业务校验失败）</b>。
+     *
+     * <p>⚠️ 这里刻意<b>不用 500</b>：业务校验失败（"用户名已存在"、
+     * "不能收藏自己发布的商品"）是本项目最高频的错误类型，
+     * 默认成 500 会让前端把"参数不对"提示成"服务器故障"。
+     *
+     * <p>需要 401 / 403 / 404 语义时，请用另一个构造显式传 code。
+     */
     public BusinessException(String message) {
-        this(Result.CODE_ERROR, message);
+        this(Result.CODE_BAD_REQUEST, message);
     }
 
     public BusinessException(Integer code, String message) {

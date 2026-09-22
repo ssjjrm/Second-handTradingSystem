@@ -1,0 +1,99 @@
+/* S3 阶段只做最小样式，视觉还原统一在 S10 做（届时会换成闲鱼色板的 CSS 变量） */
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+  color: #222;
+  background: #f7f8fa;
+}
+
+a {
+  text-decoration: none;
+}
+
+/* ---- 表单通用样式（S3 的登录/注册页共用） ---- */
+.form-card {
+  max-width: 380px;
+  margin: 60px auto;
+  padding: 28px;
+  background: #fff;
+  border: 1px solid #e5e5e5;
+  border-radius: 8px;
+}
+
+.form-card h2 {
+  margin: 0 0 20px;
+  text-align: center;
+  font-size: 20px;
+}
+
+.form-card label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 13px;
+  color: #666;
+}
+
+.form-card input {
+  display: block;
+  width: 100%;
+  margin-bottom: 14px;
+  padding: 9px 12px;
+  font-size: 14px;
+  border: 1px solid #d9d9d9;
+  border-radius: 4px;
+  outline: none;
+}
+
+.form-card input:focus {
+  border-color: #ff5000;
+}
+
+.form-card button {
+  width: 100%;
+  padding: 10px;
+  font-size: 15px;
+  color: #fff;
+  background: #ff5000;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.form-card button:disabled {
+  background: #bbb;
+  cursor: not-allowed;
+}
+
+.form-card .msg-error {
+  margin-bottom: 12px;
+  padding: 8px 10px;
+  font-size: 13px;
+  color: #c62828;
+  background: #fff0f0;
+  border-radius: 4px;
+}
+
+.form-card .msg-ok {
+  margin-bottom: 12px;
+  padding: 8px 10px;
+  font-size: 13px;
+  color: #2e7d32;
+  background: #f0fff4;
+  border-radius: 4px;
+}
+
+.form-card .foot {
+  margin-top: 16px;
+  text-align: center;
+  font-size: 13px;
+  color: #666;
+}
+
+.form-card .foot a {
+  color: #ff5000;
+}
