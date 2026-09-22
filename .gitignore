@@ -1,0 +1,39 @@
+# ---- Java / Maven ----
+backend/target/
+*.class
+*.jar
+*.war
+
+# ---- Node / Vite ----
+node_modules/
+frontend/dist/
+frontend/.vite/
+npm-debug.log*
+pnpm-debug.log*
+yarn-error.log*
+
+# ---- Python ----
+ai-service/.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# ---- 本地敏感配置（绝不提交）----
+.env
+.env.local
+*.local
+
+# ---- 运行时产物 ----
+logs/
+uploads/
+*.log
+
+# ---- IDE ----
+.idea/
+.vscode/
+*.iml
+.DS_Store
+
+# ---- 临时分析产物 ----
+_schema_dump.txt
+_tmp/
