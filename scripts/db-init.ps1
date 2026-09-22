@@ -56,20 +56,42 @@ if ($existsCount -eq 0) {
 }
 
 # ---------- 3. 导入 SQL ----------
-# 备选顺序：优先按"表之间的外键依赖"排，其次按文件名排
-$priority = @('user','category','book','product','address','cart','order')
-$files = Get-ChildItem $SqlDir -Filter '*.sql' -File | Sort-Object @{
-    Expression = {
-        $n = $_.Name.ToLower()
-        $idx = 0
-        for ($i = 0; $i -lt $priority.Count; $i++) {
-            if ($n -match $priority[$i]) { $idx = $i; break }
-        }
-        $idx
-    }
-}, Name
+# 3.1 先排除"重置类"脚本。
+#     这类脚本内容是 DROP DATABASE（见 database\99_reset.sql），
+#     如果被自动导入，会把刚建好的库删掉 —— 必须跳过。
+$allFiles = Get-ChildItem $SqlDir -Filter '*.sql' -File
+$skipped  = @($allFiles | Where-Object { $_.Name -match '^\d*9\d_' -or $_.Name -match 'reset' })
+$files    = @($allFiles | Where-Object { $skipped.FullName -notcontains $_.FullName })
 
-if (-not $files) { throw "在 $SqlDir 下没找到任何 .sql 文件" }
+if ($skipped.Count -gt 0) {
+    Write-Host "  跳过 $($skipped.Count) 个重置类脚本（含 DROP DATABASE，需手动执行）：" -ForegroundColor DarkYellow
+    $skipped | ForEach-Object { Write-Host "    ⊘ $($_.Name)" -ForegroundColor DarkYellow }
+}
+
+if (-not $files -or $files.Count -eq 0) { throw "在 $SqlDir 下没找到可导入的 .sql 文件" }
+
+# 3.2 决定导入顺序，支持两种命名约定：
+#     约定 A（本项目）：文件名统一带数字前缀 01_/02_/03_ → 直接按【前缀数字】升序
+#     约定 B（参考项目）：文件名无前缀               → 按【外键依赖】排，其次按文件名
+$numbered = @($files | Where-Object { $_.Name -match '^\d+_' })
+if ($numbered.Count -eq $files.Count) {
+    $files = $files | Sort-Object @{ Expression = { [int]($_.Name -replace '^(\d+).*$', '$1') } }, Name
+    Write-Host "  导入顺序：按文件名数字前缀升序" -ForegroundColor DarkGray
+} else {
+    $priority = @('user','category','book','product','address','cart','order')
+    $files = $files | Sort-Object @{
+        Expression = {
+            $n = $_.Name.ToLower()
+            $idx = 0
+            for ($i = 0; $i -lt $priority.Count; $i++) {
+                if ($n -match $priority[$i]) { $idx = $i; break }
+            }
+            $idx
+        }
+    }, Name
+    Write-Host "  导入顺序：按外键依赖（user→category→product→...）" -ForegroundColor DarkGray
+}
+$files | ForEach-Object { Write-Host "    → $($_.Name)" -ForegroundColor DarkGray }
 
 $ok = 0
 foreach ($f in $files) {
