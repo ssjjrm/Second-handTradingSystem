@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>S2 后端骨架 - 接口验证</title>
+  <style>
+    body { font-family: Consolas, monospace; margin: 20px; max-width: 1200px; }
+    fieldset { margin-bottom: 16px; padding: 12px; border: 1px solid #ccc; }
+    legend { font-weight: bold; }
+    input, select { margin: 4px; padding: 4px; }
+    button { margin: 4px; padding: 6px 14px; cursor: pointer; }
+    pre { background: #f5f5f5; padding: 10px; max-height: 500px; overflow: auto; }
+    .ok { color: #2e7d32; font-weight: bold; }
+    .bad { color: #c62828; font-weight: bold; }
+    .hint { color: #666; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <h1>S2 后端骨架 · 接口验证</h1>
+  <p>后端：<code id="base"></code>　
+     状态：<code id="stat">未检测</code></p>
+  <p class="hint">这个页面是「消耗品」，只用来用眼睛看接口对不对，S10 之后会删掉。</p>
+
+  <fieldset>
+    <legend>1. 服务活着吗　GET /api/health</legend>
+    <button onclick="h()">请求</button>
+    <span class="hint">期望：code=200，data.status=UP</span>
+  </fieldset>
+
+  <fieldset>
+    <legend>2. 数据库 + 分页插件　GET /api/health/db</legend>
+    <button onclick="db()">请求</button>
+    <span class="hint">期望：userTotal=6，recordCount=<b>2</b>（不是 6！），paginationWorking=true</span>
+  </fieldset>
+
+  <fieldset>
+    <legend>3. 未登录访问受保护接口　GET /api/auth/me</legend>
+    <button onclick="me()">请求</button>
+    <span class="hint">S2 阶段期望：HTTP 404（这个接口还没写，S3 才做）　S3 完成后期望：HTTP 401</span>
+  </fieldset>
+
+  <fieldset>
+    <legend>4. 访问不存在的路径　GET /api/does-not-exist</legend>
+    <button onclick="nf()">请求</button>
+    <span class="hint">期望：HTTP 404，JSON 里 code=404、message 含「接口不存在」</span>
+  </fieldset>
+
+  <h3>响应</h3>
+  <pre id="out">（点上面的按钮）</pre>
+
+<script>
+const BASE = 'http://localhost:8081';
+document.getElementById('base').textContent = BASE;
+const out = document.getElementById('out');
+
+// S3 的登录页会把 token 存进 localStorage，这个页面直接复用
+function token() { return localStorage.getItem('token') || ''; }
+
+// 统一请求：自动带 token、把 JSON 原文打印出来
+async function call(method, url, body) {
+  out.textContent = `→ ${method} ${url}\n\n`;
+  try {
+    const res = await fetch(BASE + url, {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token() ? { 'Authorization': 'Bearer ' + token() } : {})
+      },
+      body: body ? JSON.stringify(body) : undefined
+    });
+    const text = await res.text();
+    let pretty = text;
+    try { pretty = JSON.stringify(JSON.parse(text), null, 2); } catch (e) { /* 非 JSON 原样显示 */ }
+    out.textContent += `← HTTP ${res.status}\n\n` + pretty;
+  } catch (e) {
+    out.textContent += '❌ 请求失败：' + e.message
+      + '\n\n（后端启动了吗？地址应该是 http://localhost:8081）';
+  }
+}
+
+// 顶部状态灯
+async function ping() {
+  const el = document.getElementById('stat');
+  try {
+    const r = await fetch(BASE + '/api/health');
+    el.textContent = r.ok ? '后端在线 ✅' : '后端异常 HTTP ' + r.status;
+    el.className = r.ok ? 'ok' : 'bad';
+  } catch (e) {
+    el.textContent = '后端没起来 ❌';
+    el.className = 'bad';
+  }
+}
+
+function h()  { call('GET', '/api/health'); }
+function db() { call('GET', '/api/health/db'); }
+function me() { call('GET', '/api/auth/me'); }
+function nf() { call('GET', '/api/does-not-exist'); }
+
+ping();
+</script>
+</body>
+</html>

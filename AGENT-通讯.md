@@ -190,3 +190,51 @@
 
 <!-- ↑↑↑ 阶段 S1 结束。下一个阶段（S2）完成后，在下面新建「## 阶段 S2：xxx」标题 ↓↓↓ -->
 
+---
+
+## 阶段 S2：后端骨架
+
+### 【编写助手】工作总结
+
+**状态**：✅ 已完成　**日期**：2026-09-22
+
+1. 后端在 8081 启动成功并连上 `secondhand_shop`；`/api/health` 与 `/api/health/db` 两个接口实测通过。
+2. 定下统一响应格式和全局异常处理：业务异常、参数校验失败、路径不存在、兜底异常，四类都返回同一种 JSON 结构。
+3. 注册了分页插件并**实测确认生效**（参考项目正是漏配它，导致分页一直静默失效）；过程中还发现并修掉了两个隐私与格式问题。
+
+**文件清单**：
+
+| 文件 | 说明 |
+|------|------|
+| `backend/pom.xml` | 依赖声明（含 Lombok 的两条关键配置） |
+| `backend/src/main/resources/application.yml` | 端口 8081 + 数据源 + MyBatis-Plus + JWT |
+| `backend/src/main/java/com/secondhand/SecondhandApplication.java` | 启动类 |
+| `.../common/Result.java`、`BusinessException.java`、`GlobalExceptionHandler.java` | 统一响应体与异常处理 |
+| `.../config/MybatisPlusConfig.java`、`WebConfig.java`、`JacksonConfig.java` | 分页插件、跨域与静态资源、时间格式 |
+| `.../entity/User.java`、`.../mapper/UserMapper.java` | 建来验证分页，S3 会直接复用 |
+| `.../controller/HealthController.java` | 健康检查 |
+| `verify/s2-health.html` | 验证页（4 个按钮） |
+
+**需要讲清楚的点**：`User` 实体上的 `password` / `phone` / `wechat` / `qq` 四个字段被刻意标记为**永不序列化**，需要展示时必须走专门的 VO —— 这是有意的设计，不是漏写。
+
+### 【代码老师】教学总结
+
+**日期**：____________
+
+**用户已理解**（3 句话以内）：
+
+（待填写）
+
+**发现的问题**：
+
+| # | 问题现象 / 位置 | 用户的困惑点 | 严重程度 |
+|:-:|----------------|-------------|:--------:|
+| 1 | | | |
+
+**建议下一阶段注意**：
+
+（待填写）
+
+<!-- ↑↑↑ 阶段 S2 结束。下一个阶段（S3）完成后，在下面新建「## 阶段 S3：xxx」标题 ↓↓↓ -->
+
+
