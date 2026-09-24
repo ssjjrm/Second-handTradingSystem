@@ -33,10 +33,11 @@ import org.springframework.util.StringUtils;
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
+@RequiredArgsConstructor  //Lombok 为所有 final 字段生成一个构造器
+// 写成 final 字段 + @RequiredArgsConstructor 就行了，效果和 @Autowired 一样（都是把对象注入进来）。
 public class UserServiceImpl implements UserService {
 
-    private final UserMapper userMapper;
+    private final UserMapper userMapper; // final 字段
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
 
@@ -45,6 +46,10 @@ public class UserServiceImpl implements UserService {
     // ==================================================================
     @Override
     @Transactional(rollbackFor = Exception.class)
+    // @Transactional：Spring 在调用这个业务方法时开启或加入数据库事务；
+    // 方法正常结束就提交，遇到符合回滚规则的异常向外抛出时就回滚。
+    // 如果加在类上，login 和 getCurrentUser 也会白白开启事务——每次请求都多一次"开事务/关事务"的开销，
+    // 还会占用数据库连接更久。高并发下这些空事务是真实的资源浪费。
     public UserVO register(RegisterDTO dto) {
         // 1. 用户名唯一性检查。（数据库上还有 uk_username 兜底，防并发下的漏网之鱼）
         Long exists = userMapper.selectCount(
@@ -138,6 +143,7 @@ public class UserServiceImpl implements UserService {
         }
 
         // 传了就用新值（空串 = 清空），没传就保持原值
+        // 传了->空串"" , 没传->null
         String nickname = dto.getNickname() != null ? trimToNull(dto.getNickname()) : user.getNickname();
         String wechat = dto.getWechat() != null ? blankToNull(dto.getWechat()) : user.getWechat();
         String qq = dto.getQq() != null ? blankToNull(dto.getQq()) : user.getQq();

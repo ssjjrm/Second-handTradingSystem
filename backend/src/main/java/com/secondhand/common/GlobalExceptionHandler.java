@@ -30,6 +30,9 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
  */
 @Slf4j
 @RestControllerAdvice
+// @RestControllerAdvice：Spring 提供的一个全局控制器增强注解，最常用于全局异常处理。
+// @RestControllerAdvice = @ControllerAdvice + @ResponseBody
+// 它会对所有（或指定）Controller 生效，并且方法返回值直接转成 JSON。
 public class GlobalExceptionHandler {
 
     /** 业务异常：Service 层主动抛的，code 和 message 都是给用户看的 */

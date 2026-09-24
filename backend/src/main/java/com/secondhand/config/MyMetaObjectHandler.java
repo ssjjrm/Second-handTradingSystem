@@ -6,16 +6,37 @@ import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
 
+/*
+* @Configuration 和 @Component 的关系
+你可能注意到了：它们看起来作用一样（都是"交给 Spring 管"）。
+
+它们确实是"亲戚"：
+
+复制
+@Component                 ← 最基础："这是个 Bean"
+   ├─ @Service             ← 语义：业务层（你用得多）
+   ├─ @Repository          ← 语义：数据访问层
+   ├─ @Controller          ← 语义：接口层
+   └─ @Configuration       ← 语义：配置类 ⭐
+功能上几乎一样（都能被扫描注册），区别是**"给人看的语义"** —— 以及 @Configuration 有个额外能力：它里面的 @Bean 方法之间互相调用时，Spring 会保证拿到同一个对象（这叫"代理"机制，你现在不用管）。
+
+所以你可以这样理解：
+
+@Configuration 就是"配置版的 @Component" —— 一样的东西，只是名字告诉你"这里是配置，别放业务代码"。
+* */
+
 /**
  * MyBatis-Plus 字段自动填充。
  *
- * <p>实体上标了 {@code @TableField(fill = FieldFill.INSERT)} 的字段，
- * 在 insert / update 时会自动带上时间，不用每个 Service 都手写。
- *
- * <p>为什么还要配它？因为只写 {@code fill = INSERT} 注解、
- * 却没有 MetaObjectHandler 的话，注解是**不生效**的（字段保持 null）。
- * 数据库虽然有 {@code DEFAULT CURRENT_TIMESTAMP} 兜底，
- * 但那是"插入后再查"才有值，刚 new 出来的对象依然是 null。
+ * 它解决的是你在 tlias 里手写的那两行：
+
+ * <p>tlias你每个新增/修改都要写这两行：
+ * <li>dept.setCreateTime(LocalDateTime.now());
+ * <li>dept.setUpdateTime(LocalDateTime.now());
+ * <p>
+ * <p>它为什么用 @Component 而不是 @Configuration？
+ * 因为它不提供新对象、也不改配置，它只是实现 MyBatis-Plus 要求的一个接口（MetaObjectHandler）。
+ * MyBatis-Plus 说："你在 Spring 里放一个实现了这个接口的 Bean，我会在插入/更新时调它。"
  */
 @Component
 public class MyMetaObjectHandler implements MetaObjectHandler {

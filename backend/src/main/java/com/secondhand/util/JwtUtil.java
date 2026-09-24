@@ -31,7 +31,7 @@ public class JwtUtil {
     private static final String CLAIM_ROLE = "role";
 
     /** 密钥从配置读，绝不硬编码（硬编码的密钥一旦泄露，任何人都能伪造 token） */
-    @Value("${jwt.secret}")
+    @Value("${jwt.secret}") //从 Spring 配置里找到 jwt.secret 这个配置项，把它的值赋给下面的字段。
     private String secret;
 
     /** 有效期，毫秒 */
@@ -45,6 +45,8 @@ public class JwtUtil {
 
     /**
      * 生成 token。
+     * 把用户 ID 放进 JWT 的标准字段 subject，再把用户名和角色放进自定义字段，并写入签发时间和过期时间。
+     * 最后使用密钥签名，compact() 将这些内容组合成客户端要携带的 token 字符串。
      *
      * @param userId   用户 id（放在标准字段 subject 里）
      * @param username 用户名（自定义声明）
@@ -66,6 +68,7 @@ public class JwtUtil {
 
     /**
      * 解析并验签。
+     * 用同一个密钥验签并解析内容。签名不匹配、token 格式无效或已过期时会抛出异常。
      *
      * @throws JwtException 签名不对、格式不对、或已过期 —— 调用方负责捕获
      */

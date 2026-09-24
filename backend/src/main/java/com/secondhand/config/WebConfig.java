@@ -14,9 +14,13 @@ import java.nio.file.Paths;
 
 /**
  * Web 层配置：拦截器 + 跨域 + 静态资源映射。
+ * 实现 WebMvcConfigurer 接口，重写其中的方法。Spring 会在启动时调用这些方法，从而应用你的配置。
+ *
+ * <p>WebMvcConfigurer 就是 Spring MVC 提供的"设置面板"。 你想改哪部分行为，就重写对应的方法，其他不重写的保持默认。
+ * 这种设计叫"回调"：你不用主动调用它，你只要告诉它"当需要配置时执行我这段代码"。
  */
 @Configuration  //声明"这是一个配置类"
-@RequiredArgsConstructor
+@RequiredArgsConstructor  //Lombok 为所有 final 字段生成一个构造器
 public class WebConfig implements WebMvcConfigurer {
 
     private final JwtInterceptor jwtInterceptor;
@@ -27,6 +31,7 @@ public class WebConfig implements WebMvcConfigurer {
 
     /**
      * 注册拦截器。
+     *
      *
      * <p><b>白名单是这里最容易出错的地方。</b>参考项目的坑：它把
      * {@code /api/products/**} 整体放行，结果连 {@code /api/products/{id}/contact}

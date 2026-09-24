@@ -27,13 +27,27 @@ public final class UserContext {
     private UserContext() {
     }
 
-    /** 由 JwtInterceptor 调用，把身份写进本次请求 */
+    /** 由 JwtInterceptor 调用，把身份写进本次请求
+     *  <p>UserContext 到底怎么"留下"身份的：
+     * 每个 HTTP 请求，在服务器内部都有一个对应的"请求对象"（request）。它是这次请求专属的、用完就销毁的。
+     * <p>它内部就是一个 key-value 的容器（像一个 Map），你可以往上面存东西：
+     * UserContext.set(request, ...) 就是往这个请求对象上贴了张便签，写着"这次请求是 6 号用户发的"。
+     * 后面的任何代码（Controller、Service），只要拿到这次请求，就能读这张便签。*/
     public static void set(ServletRequest request, Integer userId, String username, String role) {
         request.setAttribute(KEY_USER_ID, userId);
         request.setAttribute(KEY_USERNAME, username);
         request.setAttribute(KEY_ROLE, role);
     }
 
+    /**
+     * getCurrentUser() 的括号里没有 request 参数，那 getAttribute() 是从哪个 request 上取的？
+     * <p>关键在 RequestContextHolder.getRequestAttributes() 这一行 —— 它"凭空"找到了当前请求。因为：
+     * <li>Tomcat 处理一个请求时，是"一个线程从头干到尾"的。
+     * <li>请求进来 → 分配一个线程 → 这个线程一路执行 Filter/Interceptor/Controller/Service → 返回响应 → 线程归还
+     * <li>中间全程都是同一个线程。 Spring 就在这个线程上记了一笔："当前这个线程正在处理 3 号请求"。
+     * <li>RequestContextHolder 就是去读这个记录。
+     *
+     * */
     private static Object getAttribute(String key) {
         ServletRequestAttributes attributes =
                 (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();

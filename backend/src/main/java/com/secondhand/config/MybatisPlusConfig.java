@@ -19,6 +19,12 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class MybatisPlusConfig {
 
+    /*
+    * 为什么需要 @Bean？
+    *你自己写的类，所以在类上加注解就行，如@Service
+    *但是第三方提供的类 —— 你改不了它的源码，没法在上面加 @Service
+    * */
+
     @Bean
     public MybatisPlusInterceptor mybatisPlusInterceptor() {
         MybatisPlusInterceptor interceptor = new MybatisPlusInterceptor();

@@ -5,6 +5,10 @@ import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
+//DTO 是 Data Transfer Object 的缩写，中文叫 数据传输对象。
+//一句话理解：
+//DTO 就是一个专门用来“搬运数据”的 Java 对象，通常只包含字段和 getter/setter，不包含业务逻辑。
+
 /**
  * 注册入参。
  *
@@ -32,6 +36,13 @@ public class RegisterDTO {
 
     @Pattern(regexp = "^$|^[1-9]\\d{4,11}$", message = "QQ号格式不正确")
     private String qq;
+
+//    ^$          |   ^[1-9]\d{4,11}$
+//    └┬┘             └──────┬──────┘
+//    空字符串          真正的 QQ 号格式
+//        └──── 或者 ────┘
+
+//    为什么必须加这个 ^$| ？ 因为 qq 是选填的（可以不填）
 
     /** 手机号：仅账号找回用，不对外展示 */
     @Pattern(regexp = "^$|^1[3-9]\\d{9}$", message = "手机号格式不正确")
