@@ -44,9 +44,12 @@ public class MyMetaObjectHandler implements MetaObjectHandler {
     @Override
     public void insertFill(MetaObject metaObject) {
         LocalDateTime now = LocalDateTime.now();
-        // strictInsertFill 只在字段确实有 fill=INSERT 注解、且当前值为 null 时才填
+        // strictInsertFill 只在字段确实有 fill=INSERT 注解、且当前值为 null 时才填；
+        // 实体上没这个字段会自动跳过，所以可以放心把"所有时间列"都列出来。
         strictInsertFill(metaObject, "createTime", LocalDateTime.class, now);
         strictInsertFill(metaObject, "updateTime", LocalDateTime.class, now);
+        // ⚠️ user_behavior 表的时间列叫 behavior_time，不是 create_time
+        strictInsertFill(metaObject, "behaviorTime", LocalDateTime.class, now);
     }
 
     @Override

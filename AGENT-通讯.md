@@ -305,5 +305,58 @@
 
 <!-- ↑↑↑ 阶段 S3 结束。下一个阶段（S4）完成后，在下面新建「## 阶段 S4：xxx」标题 ↓↓↓ -->
 
+---
+
+## 阶段 S4：分类 + 商品模块（读）
+
+### 【编写助手】工作总结
+
+**状态**：✅ 已完成　**日期**：2026-09-24
+
+1. 后端做完分类树（9 个一级 + 41 个二级，各自带在售商品数）和热搜词，以及商品列表（关键词 / 分类 / 价格区间 / 交易地点 / 四种排序 / 分页）和商品详情。
+2. ⭐ 本阶段最大的修正是**把登录拦截器从一个拆成两个**：公开接口原先放在白名单里，导致拦截器**完全不执行**，登录用户在商品详情里也被当成游客，`canContact` 永远返回"请先登录"。现在拆成「可选身份」+「必须登录」两个，前者只负责认出你是谁、认不出也放行。
+3. `canContact` 五种情况、浏览量每次只 +1、浏览埋点（看别人的商品才记）、未上架商品返回 404 —— 全部实测通过；端到端脚本从 15 项扩到 **26 项**。
+
+**文件清单**：
+
+| 文件 | 说明 |
+|------|------|
+| `.../common/ProductStatus.java`、`BehaviorType.java` | 两个枚举，消灭魔法数字 |
+| `.../entity/` 新增 Category / Product / Favorite / UserBehavior | 4 个实体 |
+| `.../mapper/` 新增 Category / Product / Favorite / UserBehavior | 4 个 Mapper（ProductMapper 含浏览量的 SQL 原子自增） |
+| `.../vo/` 新增 CategoryVO / PageVO / ProductListVO / ProductDetailVO / SellerBriefVO | 出参对象 |
+| `.../dto/ProductQueryDTO.java` | 列表查询参数（7 个条件一次绑定） |
+| `.../service/` 新增 CategoryService + ProductService 及其实现 | 分类树组装、商品列表与详情 |
+| `.../controller/` 新增 CategoryController / ProductController | 4 + 2 个接口 |
+| `.../interceptor/OptionalAuthInterceptor.java` | ⭐ 新增，「可选身份」拦截器 |
+| `.../config/WebConfig.java` | 改为注册三个拦截器并用 order 固定执行顺序 |
+| `.../common/GlobalExceptionHandler.java` | 补 `HttpMessageNotReadableException` → 400（非法 JSON 之前会误报 500） |
+| `.../dto/UpdateProfileDTO.java`、`service/impl/UserServiceImpl.java` | **采纳 S3 教学总结里的高危发现**：昵称改为"必填、不可清空" |
+| `frontend/public/verify/s4-products.html` | 验证页 |
+| `scripts/e2e-test.mjs` | 端到端检查扩到 26 项 |
+
+**需要讲清楚的点**：分类树角标上的"在售数"只统计在售商品，而商品列表的 `total` 包含已售出 —— 这两个数字不同是刻意的：角标回答"有几件在卖"，列表里带上已售出是让买家知道"这个价位能成交"。
+
+### 【代码老师】教学总结
+
+**日期**：____________
+
+**用户已理解**（3 句话以内）：
+
+（待填写）
+
+**发现的问题**：
+
+| # | 问题现象 / 位置 | 用户的困惑点 | 严重程度 |
+|:-:|----------------|-------------|:--------:|
+| 1 | | | |
+
+**建议下一阶段注意**：
+
+（待填写）
+
+<!-- ↑↑↑ 阶段 S4 结束。下一个阶段（S5）完成后，在下面新建「## 阶段 S5：xxx」标题 ↓↓↓ -->
+
+
 
 

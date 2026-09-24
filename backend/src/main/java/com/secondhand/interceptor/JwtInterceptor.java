@@ -2,12 +2,7 @@ package com.secondhand.interceptor;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.secondhand.common.Result;
-import com.secondhand.entity.User;
-import com.secondhand.mapper.UserMapper;
-import com.secondhand.util.JwtUtil;
 import com.secondhand.util.UserContext;
-import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.ExpiredJwtException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -26,53 +21,52 @@ AuthController.login → UserServiceImpl.login
 
 ② 前端存 token
 
-③ 之后每个请求
-JwtInterceptor.preHandle
+③ 之后每个请求 —— 现在由【两个】拦截器接力完成（原来是合成一个，见下方说明）
+
+OptionalAuthInterceptor.preHandle      （拦所有 /api/**，永不拒绝）
      ├─ OPTIONS → 放行
      ├─ 取 Authorization 头 → 剥掉 "Bearer "
-     ├─ JwtUtil.parseToken() → 失败 → 返回 401 JSON
+     ├─ JwtUtil.parseToken() → 失败 → 记为游客，照样放行
      ├─ 查库确认账号存在且没被禁用        ← tlias 没有这一步
-     └─ UserContext.set(request, id, username, role)   ← 【关键：留下了】
+     └─ UserContext.set(request, id, username, role)   ← 【关键：留下了身份】
+
+JwtInterceptor.preHandle                （只拦需要登录的路径）
+     └─ UserContext 里没身份 → 401 JSON
 
 ④ Controller / Service 执行
    UserContext.requireUserId()   ← 【随时能问"当前是谁"】
 */
 
 /**
- * 登录拦截器。
+ * 「必须登录」拦截器。
  *
- * <p>执行顺序：
- * <pre>
- * 请求 → JwtInterceptor
- *         ├─ OPTIONS 预检        → 直接放行
- *         ├─ 没有 Authorization  → 401 JSON
- *         ├─ token 无效 / 过期   → 401 JSON
- *         ├─ 账号不存在 / 被禁用  → 401 JSON
- *         └─ 都通过 → 写入 UserContext → 交给 Controller
- * </pre>
+ * <p><b>为什么从"一个拦截器"拆成了"两个"</b>（这是一次真实的踩坑）：
  *
- * <p>⚠️ 三个坑：
+ * <p>原来只有这一个拦截器，白名单里放行了 {@code /api/products/{id}}。
+ * 结果发现：登录用户访问商品详情时，{@code canContact} 永远返回
+ * "请先登录后再联系卖家" —— 因为白名单里的路径**拦截器根本不执行**，
+ * {@code UserContext} 是空的，登录的人也被当成了游客。
+ *
+ * <p>矛盾的根源：一个拦截器没法同时干两件相反的事 ——
+ * "这条路径不需要登录" 和 "但登录了的话我要知道你是谁"。
+ *
+ * <p>拆成两个之后各自单纯：{@link OptionalAuthInterceptor} 负责**认出身份**
+ * （认不出也不拦），本类负责**检查有没有身份**。顺序由 {@code WebConfig}
+ * 的 {@code .order(1)} / {@code .order(2)} 固定。
+ *
+ * <p>⚠️ 两个坑：
  * <ol>
  *   <li><b>CORS 预检必须放行</b>：浏览器发 OPTIONS 时不会带 Authorization 头，
  *       拦下来会导致所有跨域请求失败，而且报错信息完全看不出原因</li>
  *   <li><b>返回要用 response 直接写</b>，不要抛异常 —— 抛出去会被
  *       {@code GlobalExceptionHandler} 兜底成 500，前端就分不清"没登录"和"服务器炸了"</li>
- *   <li><b>要 setCharacterEncoding</b>，否则中文提示是乱码</li>
  * </ol>
- *
- * <p>这里多查了一次数据库（确认账号还在、没被禁用），
- * 好处是管理员禁用用户后**立即生效**，不用等 token 24 小时过期。
  */
 @Slf4j // 编译时自动为类生成一个日志对象
 @Component  // 把当前类标记为一个 Spring Bean，交给 Spring 容器管理。
 @RequiredArgsConstructor  // 为类中所有 final 字段 和 @NonNull 字段 生成一个构造器。
 public class JwtInterceptor implements HandlerInterceptor {
 
-    private static final String HEADER = "Authorization";
-    private static final String PREFIX = "Bearer ";
-
-    private final JwtUtil jwtUtil;
-    private final UserMapper userMapper;
     private final ObjectMapper objectMapper;
 
     /**
@@ -94,47 +88,20 @@ public class JwtInterceptor implements HandlerInterceptor {
             return true;
         }
 
-        // 2. 取 Authorization 头
-        String header = request.getHeader(HEADER);
-        if (header == null || !header.startsWith(PREFIX)) {
-            return reject(response, "请先登录");
-        }
-        String token = header.substring(PREFIX.length()).trim();
-        if (token.isEmpty()) {
-            return reject(response, "请先登录");
-        }
-
-        // 3. 解析 parseToken(token)
-        // JwtUtil.parseToken() → 失败 → 返回 401 JSON
-        Claims claims;
-        try {
-            claims = jwtUtil.parseToken(token);
-        } catch (ExpiredJwtException e) {
-            return reject(response, "登录已过期，请重新登录");
-        } catch (Exception e) {
-            log.debug("token 解析失败：{}", e.getMessage());
-            return reject(response, "登录状态无效，请重新登录");
+        // 2. 身份是谁放进去的？
+        //    OptionalAuthInterceptor 排在前面（order 1），它拦所有 /api/**，
+        //    带了有效 token 就把身份写进 UserContext。
+        //    所以这里只要判断"认出来了没有"就够了 ——
+        //    不用再解析 token、也不用再查一次库（那些活儿前面已经干完了）。
+        if (UserContext.getCurrentUserId() != null) {
+            return true;
         }
 
-        Integer userId;
-        try {
-            userId = Integer.valueOf(claims.getSubject());
-        } catch (NumberFormatException e) {
-            return reject(response, "登录状态无效，请重新登录");
-        }
-
-        // 4. 查库：确认账号仍然存在且没被禁用
-        User user = userMapper.selectById(userId);
-        if (user == null) {
-            return reject(response, "账号不存在，请重新登录");
-        }
-        if (user.getStatus() != null && user.getStatus() == 0) {
-            return reject(response, "账号已被禁用，请联系管理员");
-        }
-
-        // 5. 写入请求上下文，后续用 UserContext 取
-        UserContext.set(request, user.getId(), user.getUsername(), user.getRole());
-        return true;
+        // 3. 没认出来 → 401。
+        //    如果前置拦截器记下了具体原因（token 过期 / 账号被禁用 / 账号不存在），
+        //    这里就用那个更准确的提示；否则说明压根没带 token。
+        String reason = (String) request.getAttribute(OptionalAuthInterceptor.ATTR_AUTH_ERROR);
+        return reject(response, reason != null ? reason : "请先登录");
     }
 
     /**

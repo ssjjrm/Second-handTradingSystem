@@ -144,7 +144,20 @@ public class UserServiceImpl implements UserService {
 
         // 传了就用新值（空串 = 清空），没传就保持原值
         // 传了->空串"" , 没传->null
-        String nickname = dto.getNickname() != null ? trimToNull(dto.getNickname()) : user.getNickname();
+        //
+        // ⚠️ 昵称是唯一的例外：它必填、**不允许清空**。
+        //    昵称是展示给别人的名字，空了会让商品列表、卖家主页显示成空白；
+        //    而且 UserVO 上的 @JsonInclude(NON_NULL) 会让这个键直接从 JSON 里消失，
+        //    前端连"这里本该有值"都看不出来。（DTO 上也有 @Size(min=1) 兜一层）
+        String nickname = user.getNickname();
+        if (dto.getNickname() != null) {
+            String trimmedNickname = dto.getNickname().trim();
+            if (!StringUtils.hasText(trimmedNickname)) {
+                throw new BusinessException(Result.CODE_BAD_REQUEST, "昵称不能为空");
+            }
+            nickname = trimmedNickname;
+        }
+
         String wechat = dto.getWechat() != null ? blankToNull(dto.getWechat()) : user.getWechat();
         String qq = dto.getQq() != null ? blankToNull(dto.getQq()) : user.getQq();
         String phone = dto.getPhone() != null ? blankToNull(dto.getPhone()) : user.getPhone();
@@ -223,10 +236,6 @@ public class UserServiceImpl implements UserService {
 
     /** 空白字符串统一转成 null，避免库里出现 "" 和 NULL 两种"空" */
     private String blankToNull(String value) {
-        return StringUtils.hasText(value) ? value.trim() : null;
-    }
-
-    private String trimToNull(String value) {
         return StringUtils.hasText(value) ? value.trim() : null;
     }
 }

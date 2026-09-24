@@ -3,6 +3,7 @@ package com.secondhand.common;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.BindException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -70,6 +71,20 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Result<Void>> handleNotFound(NoResourceFoundException e) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .body(Result.error(Result.CODE_NOT_FOUND, "接口不存在：" + e.getResourcePath()));
+    }
+
+    /**
+     * 请求体不是合法 JSON（或者字段类型对不上，比如给数字字段传了字符串）。
+     *
+     * <p>不处理的话它会落到兜底 Exception 变成 <b>500</b> —— 但这其实是**客户端的错**，
+     * 应该是 400。区分开之后前端才能判断：400 = 我发的数据有问题（改数据），
+     * 500 = 服务器故障（等一等再重试）。
+     */
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<Result<Void>> handleMessageNotReadable(HttpMessageNotReadableException e) {
+        log.warn("请求体解析失败：{}", e.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(Result.error(Result.CODE_BAD_REQUEST, "请求体格式错误，请检查 JSON 是否合法"));
     }
 
     /** 兜底：任何没被上面接住的异常 */

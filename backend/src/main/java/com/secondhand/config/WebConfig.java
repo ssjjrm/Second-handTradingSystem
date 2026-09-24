@@ -2,6 +2,7 @@ package com.secondhand.config;
 
 import com.secondhand.interceptor.AdminInterceptor;
 import com.secondhand.interceptor.JwtInterceptor;
+import com.secondhand.interceptor.OptionalAuthInterceptor;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
@@ -23,6 +24,7 @@ import java.nio.file.Paths;
 @RequiredArgsConstructor  //Lombok 为所有 final 字段生成一个构造器
 public class WebConfig implements WebMvcConfigurer {
 
+    private final OptionalAuthInterceptor optionalAuthInterceptor;
     private final JwtInterceptor jwtInterceptor;
     private final AdminInterceptor adminInterceptor;
 
@@ -30,8 +32,19 @@ public class WebConfig implements WebMvcConfigurer {
     private String uploadPath;
 
     /**
-     * 注册拦截器。
+     * 注册拦截器（三个，按 order 依次执行）。
      *
+     * <p><b>为什么是三个而不是一个？</b>
+     * 「公开接口」和「必须登录的接口」本身就是两类东西，
+     * 但公开接口里又有一类（如商品详情）"登录了的话还得知道你是谁"。
+     * 用一个拦截器 + 白名单做不到这件事 —— 白名单里的路径拦截器根本不执行，
+     * 身份就丢了。拆开之后各管一段：
+     *
+     * <pre>
+     *   order 1  OptionalAuthInterceptor  拦所有 /api/**，认出身份就记下，认不出当游客（永不拒绝）
+     *   order 2  JwtInterceptor           只跑非白名单路径，检查有没有身份，没有就 401
+     *   order 3  AdminInterceptor         只跑 /api/admin/**，检查是不是管理员，不是就 403
+     * </pre>
      *
      * <p><b>白名单是这里最容易出错的地方。</b>参考项目的坑：它把
      * {@code /api/products/**} 整体放行，结果连 {@code /api/products/{id}/contact}
@@ -51,6 +64,13 @@ public class WebConfig implements WebMvcConfigurer {
      */
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
+        // ① 可选身份：拦所有 /api/**，永不拒绝。
+        //    带了有效 token 就把身份写进 UserContext，没带就当游客。
+        registry.addInterceptor(optionalAuthInterceptor)
+                .addPathPatterns("/api/**")
+                .order(1);
+
+        // ② 必须登录：只跑不在白名单里的路径
         registry.addInterceptor(jwtInterceptor)
                 .addPathPatterns("/api/**")
                 .excludePathPatterns(
@@ -68,11 +88,13 @@ public class WebConfig implements WebMvcConfigurer {
                         "/api/products/{id:[0-9]+}",
                         // 卖家主页：游客可看
                         "/api/sellers/**"
-                );
+                )
+                .order(2);
 
-        // 管理后台：必须是管理员。它在 JwtInterceptor 之后执行，所以此刻已确认登录
+        // ③ 管理后台：必须是管理员。它在前面两个之后执行，所以此刻已确认登录
         registry.addInterceptor(adminInterceptor)
-                .addPathPatterns("/api/admin/**");
+                .addPathPatterns("/api/admin/**")
+                .order(3);
     }
 
     /**

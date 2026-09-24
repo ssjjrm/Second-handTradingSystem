@@ -235,6 +235,96 @@ async function main() {
     const pathAfterLogout = await cdp.eval('location.pathname')
     check('退出后回到登录页', pathAfterLogout === '/login', `当前路径 ${pathAfterLogout}`)
 
+    // ================= 7. S4 分类 + 商品（此时是未登录状态）=================
+    console.log('\n[7] S4 验证页：分类树 / 商品列表 / 详情 / 浏览量')
+    await cdp.send('Page.navigate', { url: FRONT + '/verify/s4-products.html' })
+    await sleep(1500)
+
+    const pageTitle = await cdp.eval('document.querySelector("h1")?.textContent || ""')
+    check('S4 验证页能加载', pageTitle.includes('S4'), `"${pageTitle.trim()}"`)
+
+    const treeInfo = await cdp.eval(`(async () => {
+      const r = await fetch('/api/categories'); const j = await r.json();
+      const roots = j.data;
+      const children = roots.reduce((s, x) => s + (x.children ? x.children.length : 0), 0);
+      return roots.length + '|' + children + '|' + roots[0].name + '|' + roots[0].children[0].name;
+    })()`)
+    check('分类树：9 个一级 / 41 个二级，父子正确',
+      treeInfo.startsWith('9|41|数码电子|手机'), treeInfo)
+
+    const listInfo = await cdp.eval(`(async () => {
+      const r = await fetch('/api/products?size=3'); const j = await r.json();
+      const first = j.data.records[0];
+      return j.data.records.length + '|' + j.data.total + '|' + Array.isArray(first.images)
+           + '|' + (first.statusText || '') + '|' + (first.categoryName || '');
+    })()`)
+    check('商品列表：分页生效、images 是数组、带 statusText/categoryName',
+      listInfo.startsWith('3|53|true|'), listInfo)
+
+    const privacy = await cdp.eval(`(async () => {
+      const r = await fetch('/api/products?size=100'); const t = await r.text();
+      return ['wechat', 'qq', 'phone'].filter(f => t.includes('"' + f + '"')).join(',') || 'clean';
+    })()`)
+    check('列表不含任何联系方式', privacy === 'clean', privacy)
+
+    const sortCheck = await cdp.eval(`(async () => {
+      const asc = await (await fetch('/api/products?sort=priceAsc&size=3')).json();
+      const desc = await (await fetch('/api/products?sort=priceDesc&size=3')).json();
+      return asc.data.records[0].price + '|' + desc.data.records[0].price;
+    })()`)
+    const [ascPrice, descPrice] = sortCheck.split('|').map(Number)
+    check('价格排序生效', ascPrice < descPrice, `升序首项 ¥${ascPrice} < 降序首项 ¥${descPrice}`)
+
+    const detailCheck = await cdp.eval(`(async () => {
+      const ok = await (await fetch('/api/products/2')).json();
+      const notFound = await fetch('/api/products/99999');
+      const nfJson = await notFound.json();
+      const pending = await fetch('/api/products/3');
+      return [ok.data.canContact, ok.data.contactHint, ok.data.isFavorited,
+              notFound.status, nfJson.code, pending.status].join('|');
+    })()`)
+    const dc = detailCheck.split('|')
+    check('未登录详情：canContact=false 且提示正确',
+      dc[0] === 'false' && dc[1] === '请先登录后再联系卖家', `canContact=${dc[0]} hint="${dc[1]}"`)
+    check('未登录详情：isFavorited=false', dc[2] === 'false')
+    check('不存在的商品返回 HTTP 404', dc[3] === '404' && dc[4] === '404', `HTTP ${dc[3]}`)
+    check('未登录访问待审商品返回 404', dc[5] === '404', `HTTP ${dc[5]}`)
+
+    const viewCheck = await cdp.eval(`(async () => {
+      const seen = [];
+      for (let i = 0; i < 3; i++) {
+        const j = await (await fetch('/api/products/5')).json();
+        seen.push(j.data.viewCount);
+      }
+      return seen.join(',');
+    })()`)
+    const vc = viewCheck.split(',').map(Number)
+    check('浏览量每访问一次只 +1', vc[1] === vc[0] + 1 && vc[2] === vc[1] + 1, `${vc.join(' → ')}`)
+
+    // ================= 8. 登录后详情应能识别身份（验证拦截器拆分是否正确）=================
+    console.log('\n[8] 登录后访问公开的商品详情，身份应被识别')
+    const identityCheck = await cdp.eval(`(async () => {
+      const lr = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: 'buyer01', password: '123456' })
+      });
+      const lj = await lr.json();
+      const token = lj.data.token;
+
+      // 找一个 buyer01 收藏过的商品，isFavorited 应该是 true
+      const list = await (await fetch('/api/products?size=100')).json();
+      let favorited = null, contactable = null;
+      for (const p of list.data.records) {
+        const d = await (await fetch('/api/products/' + p.id,
+          { headers: { Authorization: 'Bearer ' + token } })).json();
+        if (d.data.isFavorited && d.data.canContact && favorited === null) { favorited = p.id; break; }
+      }
+      return String(favorited);
+    })()`)
+    check('登录后公开接口能识别身份（isFavorited=true 且 canContact=true 都能拿到）',
+      identityCheck !== 'null', `找到商品 id=${identityCheck}`)
+
     ws.close()
   } finally {
     browser.kill()
