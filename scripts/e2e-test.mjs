@@ -325,6 +325,76 @@ async function main() {
     check('登录后公开接口能识别身份（isFavorited=true 且 canContact=true 都能拿到）',
       identityCheck !== 'null', `找到商品 id=${identityCheck}`)
 
+    // ================= 9. S5 发布页（分类下拉必须动态加载）=================
+    console.log('\n[9] S5 验证页：分类下拉动态加载 / 上传 / 发布')
+
+    // 先登录（第 6 步退出过，第 8 步的登录没写进 localStorage）
+    await cdp.eval(`(async () => {
+      const r = await fetch('/api/auth/login', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: 'student01', password: '123456' })
+      });
+      const j = await r.json();
+      localStorage.setItem('token', j.data.token);
+      localStorage.setItem('user', JSON.stringify(j.data.user));
+      return true;
+    })()`)
+
+    await cdp.send('Page.navigate', { url: FRONT + '/verify/s5-publish.html' })
+    await sleep(2000)
+
+    const catOptions = await cdp.eval('document.querySelectorAll("#cat option").length')
+    check('分类下拉从接口动态加载（41 个二级 + 1 个一级用于反例）',
+      catOptions === 42, `option 数量 = ${catOptions}`)
+
+    const uploadResult = await cdp.eval(`(async () => {
+      const b64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+      const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+      const fd = new FormData();
+      fd.append('file', new Blob([bytes], { type: 'image/png' }), 'e2e.png');
+      const r = await fetch('/api/upload/image', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + localStorage.getItem('token') },
+        body: fd
+      });
+      const j = await r.json();
+      if (j.code !== 200) return 'FAIL|' + j.message;
+      const img = await fetch(j.data.url);
+      return j.data.url + '|' + img.status;
+    })()`)
+    check('上传图片成功且返回的 URL 可直接访问', uploadResult.endsWith('|200'), uploadResult)
+
+    // 发布 → 待审（审核流程已在 s5-test.mjs 里完整覆盖）
+    const publishResult = await cdp.eval(`(async () => {
+      const h = { 'Content-Type': 'application/json', Authorization: 'Bearer ' + localStorage.getItem('token') };
+      const tree = await (await fetch('/api/categories')).json();
+      const catId = tree.data[0].children[0].id;
+
+      const bad = await fetch('/api/products', {
+        method: 'POST', headers: h,
+        body: JSON.stringify({ title: 'e2e 反例：一级分类', categoryId: tree.data[0].id,
+          conditionLevel: '全新', price: 10, tradePlace: '东区食堂门口' })
+      });
+      const badStatus = bad.status;
+
+      const ok = await fetch('/api/products', {
+        method: 'POST', headers: h,
+        body: JSON.stringify({ title: '【e2e】浏览器发布的测试商品', categoryId: catId,
+          conditionLevel: '全新', price: 12.34, tradePlace: '东区食堂门口' })
+      });
+      const okJson = await ok.json();
+      const newId = okJson.data?.id;
+
+      const list = await (await fetch('/api/products?keyword=e2e&size=50')).json();
+      if (newId) await fetch('/api/products/' + newId, { method: 'DELETE', headers: h });
+
+      return [badStatus, ok.status, newId > 0, list.data.total].join('|');
+    })()`)
+    const pc = publishResult.split('|')
+    check('选一级分类发布 → 400', pc[0] === '400', `HTTP ${pc[0]}`)
+    check('正常发布成功并返回 id', pc[1] === '200' && pc[2] === 'true')
+    check('待审商品在前台列表看不到', pc[3] === '0', `total=${pc[3]}`)
+
     ws.close()
   } finally {
     browser.kill()

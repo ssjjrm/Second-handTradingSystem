@@ -357,6 +357,57 @@
 
 <!-- ↑↑↑ 阶段 S4 结束。下一个阶段（S5）完成后，在下面新建「## 阶段 S5：xxx」标题 ↓↓↓ -->
 
+---
+
+## 阶段 S5：发布 + 审核
+
+### 【编写助手】工作总结
+
+**状态**：✅ 已完成　**日期**：2026-10-16
+
+1. 做完图片上传（生成随机文件名 + 类型白名单）、发布商品、编辑、下架、删除、我发布的六个卖家接口，以及管理员的待审列表 / 通过 / 拒绝三个接口。
+2. 状态流转全部用**乐观锁**（把状态判断写进 `WHERE`），避免"先查再改"在并发下出现两个管理员都以为自己审核成功的情况；发布时强制校验"卖家已填联系方式"和"必须选二级分类"。
+3. 端到端验证了完整业务链：发布后前台搜不到 → 管理员通过 → 前台能搜到 → 编辑 → 下架 → 删除；另写了 38 项的 S5 专项测试脚本。
+
+**文件清单**：
+
+| 文件 | 说明 |
+|------|------|
+| `.../config/UploadStorage.java` | 上传目录的唯一来源（"写文件"和"静态访问"共用，避免图片 404） |
+| `.../controller/UploadController.java` | 图片上传 |
+| `.../dto/ProductCreateDTO.java`、`ProductUpdateDTO.java` | 发布 / 编辑入参 |
+| `.../vo/ProductMineVO.java`、`ProductAdminVO.java`、`UploadVO.java` | 出参对象 |
+| `.../service/assembler/ProductVoAssembler.java` | 商品 VO 组装器（三处共用一份逻辑） |
+| `.../service/AdminProductService.java` + impl、`.../controller/AdminProductController.java` | 审核三件套 |
+| `.../service/ProductService` + impl、`.../controller/ProductController` | 补 5 个卖家接口 |
+| `.../common/GlobalExceptionHandler.java` | 补路径参数类型错误的处理（500 → 400） |
+| `frontend/public/verify/s5-publish.html` | 验证页 |
+| `scripts/s5-test.mjs` | S5 专项测试（38 项） |
+| `scripts/e2e-test.mjs` | 扩到 31 项 |
+
+**需要讲清楚的点**：商品从发布到出现在前台要经过 `status 0（待审）→ 1（在售）`，"下架"是 **3**，和"已售出"（2）是两个不同的状态值 —— 参考项目把这两个混用了。
+
+### 【代码老师】教学总结
+
+**日期**：____________
+
+**用户已理解**（3 句话以内）：
+
+（待填写）
+
+**发现的问题**：
+
+| # | 问题现象 / 位置 | 用户的困惑点 | 严重程度 |
+|:-:|----------------|-------------|:--------:|
+| 1 | | | |
+
+**建议下一阶段注意**：
+
+（待填写）
+
+<!-- ↑↑↑ 阶段 S5 结束。下一个阶段（S6）完成后，在下面新建「## 阶段 S6：xxx」标题 ↓↓↓ -->
+
+
 
 
 

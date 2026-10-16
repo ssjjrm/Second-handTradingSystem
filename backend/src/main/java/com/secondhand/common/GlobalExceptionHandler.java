@@ -9,6 +9,7 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 /**
@@ -85,6 +86,20 @@ public class GlobalExceptionHandler {
         log.warn("请求体解析失败：{}", e.getMessage());
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(Result.error(Result.CODE_BAD_REQUEST, "请求体格式错误，请检查 JSON 是否合法"));
+    }
+
+    /**
+     * 路径变量 / 查询参数类型对不上。
+     *
+     * <p>比如 {@code GET /api/products/abc} —— 接口签名要的是 Integer，
+     * "abc" 转不过去。不处理的话会落到兜底 Exception 变成 500，
+     * 但这明明是**客户端传错了**，应该是 400。
+     */
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<Result<Void>> handleTypeMismatch(MethodArgumentTypeMismatchException e) {
+        log.warn("参数类型不匹配：{} = {}", e.getName(), e.getValue());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(Result.error(Result.CODE_BAD_REQUEST, "参数格式不正确：" + e.getName()));
     }
 
     /** 兜底：任何没被上面接住的异常 */

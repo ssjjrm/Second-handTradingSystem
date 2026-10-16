@@ -4,14 +4,11 @@ import com.secondhand.interceptor.AdminInterceptor;
 import com.secondhand.interceptor.JwtInterceptor;
 import com.secondhand.interceptor.OptionalAuthInterceptor;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
-
-import java.nio.file.Paths;
 
 /**
  * Web 层配置：拦截器 + 跨域 + 静态资源映射。
@@ -28,8 +25,8 @@ public class WebConfig implements WebMvcConfigurer {
     private final JwtInterceptor jwtInterceptor;
     private final AdminInterceptor adminInterceptor;
 
-    @Value("${upload.path:uploads}")
-    private String uploadPath;
+    /** 上传目录：和 UploadController 共用同一个来源，保证"写的"和"读的"是同一个目录 */
+    private final UploadStorage uploadStorage;
 
     /**
      * 注册拦截器（三个，按 order 依次执行）。
@@ -122,11 +119,14 @@ public class WebConfig implements WebMvcConfigurer {
      * 静态资源：把 URL {@code /uploads/xxx.jpg} 映射到本地磁盘的 uploads 目录。
      *
      * <p>上传的头像 / 商品图存本地，数据库里只存 URL 路径。
+     *
+     * <p>⚠️ 这里的目录必须和 {@code UploadController} **完全一致**，
+     * 否则会出现"上传成功但图片打不开"。所以两边都从 {@link UploadStorage} 取，
+     * 不各自算一遍路径。
      */
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
-        String absolutePath = Paths.get(uploadPath).toAbsolutePath().normalize().toString();
-        registry.addResourceHandler("/uploads/**")
-                .addResourceLocations("file:" + absolutePath + "/");
+        registry.addResourceHandler(uploadStorage.getBaseUrl() + "/**")
+                .addResourceLocations("file:" + uploadStorage.getRootDir() + "/");
     }
 }
