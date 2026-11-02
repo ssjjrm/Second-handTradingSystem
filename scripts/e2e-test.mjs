@@ -395,6 +395,56 @@ async function main() {
     check('正常发布成功并返回 id', pc[1] === '200' && pc[2] === 'true')
     check('待审商品在前台列表看不到', pc[3] === '0', `total=${pc[3]}`)
 
+    // ================= 10. S6 交易功能 =================
+    console.log('\n[10] S6 验证页：获取联系方式 / 卖家主页')
+    await cdp.send('Page.navigate', { url: FRONT + '/verify/s6-contact.html' })
+    await sleep(1500)
+
+    const s6Title = await cdp.eval('document.querySelector("h1")?.textContent || ""')
+    check('S6 验证页能加载', s6Title.includes('S6'), `"${s6Title.trim()}"`)
+
+    const contactCheck = await cdp.eval(`(async () => {
+      // 换成 buyer01（student01 的商品 id=2 是他发的）
+      const lr = await fetch('/api/auth/login', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: 'buyer01', password: '123456' })
+      });
+      const lj = await lr.json();
+      const t = lj.data.token;
+      localStorage.setItem('token', t);
+      localStorage.setItem('user', JSON.stringify(lj.data.user));
+
+      const r = await fetch('/api/products/2/contact', { headers: { Authorization: 'Bearer ' + t } });
+      const j = await r.json();
+      return [r.status, j.data?.wechat || '-', j.data?.qq || '-',
+              j.data?.tradePlace || '-', j.data?.sellerNickname || '-'].join('|');
+    })()`)
+    const cc = contactCheck.split('|')
+    check('获取联系方式成功（返回微信 / QQ / 交易地点 / 卖家昵称）',
+      cc[0] === '200' && cc[1] !== '-' && cc[2] !== '-', contactCheck)
+
+    const selfContact = await cdp.eval(`(async () => {
+      const lr = await fetch('/api/auth/login', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: 'student01', password: '123456' })
+      });
+      const t = (await lr.json()).data.token;
+      const r = await fetch('/api/products/2/contact', { headers: { Authorization: 'Bearer ' + t } });
+      const j = await r.json();
+      return r.status + '|' + j.message;
+    })()`)
+    check('联系自己发布的商品 → 400', selfContact.startsWith('400|'), selfContact)
+
+    const sellerCheck = await cdp.eval(`(async () => {
+      const r = await (await fetch('/api/sellers/2')).json();
+      const raw = JSON.stringify(r);
+      const leaked = ['wechat', 'qq', 'phone'].filter(f => raw.includes('"' + f + '"'));
+      return (leaked.length ? 'LEAK:' + leaked.join(',') : 'clean')
+           + '|' + r.data.hasContact + '|' + r.data.stats.onSaleCount;
+    })()`)
+    check('卖家主页不含联系方式，只有 hasContact 和统计',
+      sellerCheck.startsWith('clean|'), sellerCheck)
+
     ws.close()
   } finally {
     browser.kill()

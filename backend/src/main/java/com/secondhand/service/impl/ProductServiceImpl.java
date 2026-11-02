@@ -27,6 +27,7 @@ import com.secondhand.mapper.UserMapper;
 import com.secondhand.service.ProductService;
 import com.secondhand.service.assembler.ProductVoAssembler;
 import com.secondhand.util.UserContext;
+import com.secondhand.vo.ContactVO;
 import com.secondhand.vo.PageVO;
 import com.secondhand.vo.ProductDetailVO;
 import com.secondhand.vo.ProductListVO;
@@ -431,6 +432,99 @@ public class ProductServiceImpl implements ProductService {
                     Objects.equals(p.getStatus(), ProductStatus.ON_SALE.getCode()) && contacts > 0);
             return vo;
         });
+    }
+
+    // ==================================================================
+    //  交易功能（S6）—— 本项目最核心的两个方法
+    // ==================================================================
+
+    @Override
+    public ContactVO getContact(Integer productId) {
+        // ① 登录校验。
+        //    正常情况下 JwtInterceptor 已经挡过一道（contact 不在白名单里），
+        //    这里再查一次是为了"Service 被直接调用时也安全"，
+        //    顺带能给出比拦截器更贴切的提示文案。
+        Integer currentUserId = UserContext.getCurrentUserId();
+        if (currentUserId == null) {
+            throw new BusinessException(Result.CODE_UNAUTHORIZED, "请先登录后再联系卖家");
+        }
+
+        // ② 商品必须存在
+        Product product = productMapper.selectById(productId);
+        if (product == null) {
+            throw new BusinessException(Result.CODE_NOT_FOUND, "商品不存在");
+        }
+
+        // ③ 不能联系自己发布的商品
+        if (currentUserId.equals(product.getSellerId())) {
+            throw new BusinessException(Result.CODE_BAD_REQUEST, "不能联系自己发布的商品");
+        }
+
+        // ④ 商品必须在售。已售出 / 已下架 / 待审核的都不能联系 ——
+        //    否则会出现"买家联系了卖家，才发现东西早就卖了"的糟糕体验。
+        if (!Objects.equals(product.getStatus(), ProductStatus.ON_SALE.getCode())) {
+            throw new BusinessException(Result.CODE_BAD_REQUEST, "该商品已不可交易");
+        }
+
+        // ⑤ 卖家必须填了联系方式
+        User seller = userMapper.selectById(product.getSellerId());
+        if (seller == null) {
+            throw new BusinessException(Result.CODE_NOT_FOUND, "卖家不存在");
+        }
+        if (!StringUtils.hasText(seller.getWechat()) && !StringUtils.hasText(seller.getQq())) {
+            throw new BusinessException(Result.CODE_BAD_REQUEST, "卖家尚未填写联系方式");
+        }
+
+        // ⑥ 记录咨询行为。
+        //    ⚠️ 埋点失败绝不能影响主流程（BR-B08）——
+        //    用户要的是卖家的微信，不是"日志写成功了没有"。
+        //    所以这一步放在最后，而且 recordBehavior 内部已经 try-catch 吞掉异常。
+        recordBehavior(currentUserId, productId, BehaviorType.CONTACT);
+
+        // ⑦ 组装返回
+        ContactVO vo = new ContactVO();
+        vo.setProductId(product.getId());
+        vo.setProductTitle(product.getTitle());
+        vo.setSellerId(seller.getId());
+        vo.setSellerNickname(seller.getNickname());
+        vo.setSellerAvatar(seller.getAvatar());
+        vo.setWechat(seller.getWechat());
+        vo.setQq(seller.getQq());
+        vo.setTradePlace(product.getTradePlace());
+
+        log.info("用户 id={} 获取了商品 id={} 的联系方式", currentUserId, productId);
+        return vo;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void markSold(Integer productId) {
+        // 先确认是本人发布的（不是本人 → 403「无权操作此商品」）
+        requireOwnedProduct(productId);
+
+        // ⚠️⚠️ 这是本项目**唯一的并发点**，写法必须小心。
+        //
+        // ❌ 错误写法（参考项目就这么干的）：
+        //      Product p = selectById(id);
+        //      if (p.getStatus() == 1) { p.setStatus(2); updateById(p); }
+        //    检查和修改之间隔着一次数据库往返，两个并发请求会都通过检查、
+        //    都执行更新 —— 虽然最终 status 都是 2 看不出问题，
+        //    但同样的模式用在"审核"上（一个通过、一个拒绝）就会真出乱子。
+        //
+        // ✅ 正确写法：把状态判断写进 WHERE，让数据库在一个原子操作里
+        //    完成「检查 + 修改」。影响行数为 0 就说明状态已经不是在售了。
+        int rows = productMapper.update(null, new LambdaUpdateWrapper<Product>()
+                .eq(Product::getId, productId)
+                .eq(Product::getStatus, ProductStatus.ON_SALE.getCode())
+                .set(Product::getStatus, ProductStatus.SOLD.getCode()));
+
+        if (rows == 0) {
+            throw new BusinessException(Result.CODE_BAD_REQUEST, "商品已非在售状态");
+        }
+
+        // 不可逆（BR-T06）：本项目没有任何"改回在售"的接口。
+        // 想重新卖就重新发布一件新商品 —— 这样历史数据才不会被来回篡改。
+        log.info("商品 id={} 已标记为售出（不可逆）", productId);
     }
 
     /**

@@ -4,12 +4,13 @@ import com.secondhand.dto.ProductCreateDTO;
 import com.secondhand.dto.ProductQueryDTO;
 import com.secondhand.dto.ProductUpdateDTO;
 import com.secondhand.entity.Product;
+import com.secondhand.vo.ContactVO;
 import com.secondhand.vo.PageVO;
 import com.secondhand.vo.ProductDetailVO;
 import com.secondhand.vo.ProductListVO;
 import com.secondhand.vo.ProductMineVO;
 
-/** 商品模块业务接口（S4 做"读"，S5 补"写"） */
+/** 商品模块业务接口（S4 做"读"，S5 补"写"，S6 补交易） */
 public interface ProductService {
 
     /** 商品列表（公开，支持关键词/分类/价格/排序/分页） */
@@ -60,4 +61,28 @@ public interface ProductService {
 
     /** 5.9 我发布的商品（带 contactCount / needAttention） */
     PageVO<ProductMineVO> listMine(Integer page, Integer size, Integer status);
+
+    // ==================================================================
+    //  S6 新增：交易功能（本项目的核心）
+    // ==================================================================
+
+    /**
+     * 5.3 ⭐ 获取卖家联系方式。
+     *
+     * <p><b>这是整个「信息撮合」模式的落地点</b>：平台不产生订单、不碰钱，
+     * 只负责把买卖双方对接上。全项目唯一会返回「别人的」微信/QQ 的接口。
+     *
+     * <p>副作用：写一条 {@code user_behavior}（type=3 咨询）。
+     */
+    ContactVO getContact(Integer productId);
+
+    /**
+     * 5.6 ⭐ 标记已售出。
+     *
+     * <p><b>本项目唯一的并发点。</b>用乐观锁（把状态判断写进 {@code WHERE}）
+     * 保证两个并发请求只有一个能成功，而不是"先查再改"。
+     *
+     * <p>不可逆：标为已售后不能改回在售（BR-T06）。
+     */
+    void markSold(Integer productId);
 }

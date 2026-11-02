@@ -5,6 +5,7 @@ import com.secondhand.dto.ProductCreateDTO;
 import com.secondhand.dto.ProductQueryDTO;
 import com.secondhand.dto.ProductUpdateDTO;
 import com.secondhand.service.ProductService;
+import com.secondhand.vo.ContactVO;
 import com.secondhand.vo.PageVO;
 import com.secondhand.vo.ProductDetailVO;
 import com.secondhand.vo.ProductListVO;
@@ -107,6 +108,38 @@ public class ProductController {
     public Result<Void> delete(@PathVariable Integer id) {
         productService.deleteProduct(id);
         return Result.success("删除成功", null);
+    }
+
+    // ==================================================================
+    //  交易（S6）—— 信息撮合模式的落地点
+    // ==================================================================
+
+    /**
+     * 5.3 ⭐ 获取卖家联系方式。
+     *
+     * <p>⚠️ 这个方法**不在**拦截器白名单里 ——
+     * 白名单里的 {@code /api/products/{id:[0-9]+}} 只匹配纯数字 id，
+     * 而这里多了 {@code /contact} 一段，所以会正常走登录校验。
+     *
+     * <p>⚠️ 它是 GET 但有副作用（写一条 type=3 咨询行为）。
+     * 这是有意为之的权衡，接口文档 §5.3 已标注为已知的设计不规范。
+     */
+    @GetMapping("/{id:\\d+}/contact")
+    public Result<ContactVO> contact(@PathVariable Integer id) {
+        return Result.success("获取成功", productService.getContact(id));
+    }
+
+    /**
+     * 5.6 ⭐ 标记已售出（不可逆，前端必须二次确认）。
+     */
+    @PutMapping("/{id:\\d+}/mark-sold")
+    public Result<Map<String, Object>> markSold(@PathVariable Integer id) {
+        productService.markSold(id);
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("id", id);
+        data.put("status", 2);
+        data.put("statusText", "已售出");
+        return Result.success("已标记为售出", data);
     }
 
     /**
