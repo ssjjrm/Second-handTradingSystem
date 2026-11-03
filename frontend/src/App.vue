@@ -39,6 +39,7 @@ function logout() {
       <span class="spacer"></span>
 
       <template v-if="isLoggedIn">
+        <router-link to="/profile">个人中心</router-link>
         <span class="who">你好，{{ user?.nickname || user?.username }}</span>
         <a href="#" @click.prevent="logout">退出登录</a>
       </template>

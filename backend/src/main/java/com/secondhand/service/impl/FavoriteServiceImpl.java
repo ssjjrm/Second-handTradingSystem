@@ -95,6 +95,8 @@ public class FavoriteServiceImpl implements FavoriteService {
             favorite.setProductId(productId);
             favoriteMapper.insert(favorite);
         } catch (DuplicateKeyException e) {
+            //DuplicateKeyException 是Spring对数据库唯一约束冲突的标准化封装
+            //当尝试插入或更新数据，违反了主键或唯一索引约束时就会抛出。
             // 并发下另一个请求刚插进去了 —— 这不是错误，用户想要的结果已经达成了
             log.debug("并发重复收藏，按已收藏处理：userId={}, productId={}", userId, productId);
             return currentFavoriteCount(productId);

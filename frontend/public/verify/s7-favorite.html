@@ -115,7 +115,7 @@ async function addFav() {
   if (r?.status === 200) {
     const c = r.json.data.favoriteCount;
     out.textContent += `\n\n想要数 = ${c}`
-      + (lastCount !== null ? `（上一次是 ${lastCount}，${c === lastCount + 1 ? '✅ 正确 +1' : c === lastCount ? '（没变，可能本来就收藏过）' : '✗ 数字异常')}）` : '');
+      + (lastCount !== null ? `（上一次是 ${lastCount}，${c === lastCount + 1 ? '✅ 正确 +1' : c === lastCount ? '（没变，可能本来就收藏过）' : '✗ 数字异常'}）` : '');
     lastCount = c;
   }
 }
@@ -125,7 +125,7 @@ async function removeFav() {
   if (r?.status === 200) {
     const c = r.json.data.favoriteCount;
     out.textContent += `\n\n想要数 = ${c}`
-      + (lastCount !== null ? `（上一次是 ${lastCount}，${c === lastCount - 1 ? '✅ 正确 -1' : c === lastCount ? '（没变，可能本来就没收藏）' : '✗ 数字异常')}）` : '');
+      + (lastCount !== null ? `（上一次是 ${lastCount}，${c === lastCount - 1 ? '✅ 正确 -1' : c === lastCount ? '（没变，可能本来就没收藏）' : '✗ 数字异常'}）` : '');
     lastCount = c;
   }
 }

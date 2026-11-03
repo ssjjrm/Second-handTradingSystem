@@ -505,6 +505,66 @@ async function main() {
     })()`)
     check('我的收藏返回嵌套商品信息', behaviorCheck === '200|true', behaviorCheck)
 
+    // ================= 12. S8 个人中心 + 卖家主页 =================
+    console.log('\n[12] S8 页面：个人中心 / 卖家主页')
+
+    // 用 student01 登录（他有商品、有被咨询的数据）
+    await cdp.eval(`(async () => {
+      const r = await fetch('/api/auth/login', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: 'student01', password: '123456' })
+      });
+      const j = await r.json();
+      localStorage.setItem('token', j.data.token);
+      localStorage.setItem('user', JSON.stringify(j.data.user));
+      return true;
+    })()`)
+
+    await cdp.send('Page.navigate', { url: FRONT + '/profile' })
+    await sleep(2200)
+
+    const profileTitle = await cdp.eval('document.querySelector("h1")?.textContent || ""')
+    check('个人中心能加载', profileTitle.includes('个人中心'), `"${profileTitle.trim()}"`)
+
+    const statCount = await cdp.eval('document.querySelectorAll(".stats .stat").length')
+    check('顶部有 5 个统计数字', statCount === 5, `实际 ${statCount} 个`)
+
+    const tabs = await cdp.eval(
+      '[...document.querySelectorAll(".tabs button")].map(b => b.textContent).join("|")')
+    check('3 个 Tab（我发布的 / 我的收藏 / 联系方式设置）',
+      tabs.includes('我发布的') && tabs.includes('我的收藏') && tabs.includes('联系方式设置'), tabs)
+
+    const rows = await cdp.eval('document.querySelectorAll(".row-card").length')
+    check('「我发布的」有数据', rows > 0, `${rows} 行`)
+
+    const attention = await cdp.eval('document.querySelectorAll(".attention").length')
+    console.log(`    （其中 ${attention} 条带「N 人想要，成交后请标记售出」提醒）`)
+
+    // 切到"联系方式设置" Tab，验证逐条保存的界面存在
+    await cdp.eval(`(() => {
+      const btn = [...document.querySelectorAll('.tabs button')].find(b => b.textContent.includes('联系方式'))
+      btn?.click(); return !!btn
+    })()`)
+    await sleep(800)
+    const fieldCount = await cdp.eval('document.querySelectorAll(".field").length')
+    check('联系方式设置是逐条保存（每个字段一个保存按钮）', fieldCount >= 4, `${fieldCount} 个字段行`)
+
+    // 卖家主页
+    await cdp.send('Page.navigate', { url: FRONT + '/seller/2' })
+    await sleep(1800)
+
+    const sellerTitle = await cdp.eval('document.querySelector(".profile h1")?.textContent || ""')
+    check('卖家主页能加载', sellerTitle.length > 0, `"${sellerTitle}"`)
+
+    const bodyText = await cdp.eval('document.body.innerText')
+    check('卖家主页【不显示】卖家的微信号', !bodyText.includes('zhe_ershou'),
+      bodyText.includes('zhe_ershou') ? '泄漏了微信号！' : '页面文本里没有微信号')
+    check('卖家主页提示"已填写联系方式"（但不显示内容）',
+      bodyText.includes('已填写联系方式'))
+
+    const cards = await cdp.eval('document.querySelectorAll(".grid .card").length')
+    check('卖家在售商品以卡片展示', cards > 0, `${cards} 张卡片`)
+
     ws.close()
   } finally {
     browser.kill()

@@ -2,10 +2,10 @@
 import { computed, ref } from 'vue'
 
 /**
- * 首页骨架（S3 临时版）。
+ * 首页（S8 版骨架）。
  *
- * 现在只用来确认"登录态在页面之间是通的"。
- * S4 做完商品列表后，这个文件会被真正的首页替换掉。
+ * ⚠️ 这一页到 S10 会被真正的商品列表首页替换掉。
+ * 现在它的作用是"导航中心"：把已经做好的页面和验证页都列出来，方便人肉点一遍。
  */
 const token = ref(localStorage.getItem('token') || '')
 const user = ref(JSON.parse(localStorage.getItem('user') || 'null'))
@@ -15,29 +15,39 @@ const isLoggedIn = computed(() => !!token.value)
 
 <template>
   <main class="content">
-    <h1>S3 用户模块已完成 ✅</h1>
+    <h1>校园二手交易平台</h1>
 
     <p v-if="isLoggedIn" class="ok">
-      当前登录：{{ user?.username }}（{{ user?.role }}），token 长度 {{ token.length }}
+      已登录：{{ user?.nickname || user?.username }}（{{ user?.role }}）
     </p>
     <p v-else class="warn">
-      当前未登录 —— 去 <router-link to="/login">登录页</router-link> 登录试试
+      当前未登录 —— 去 <router-link to="/login">登录页</router-link> 登录
     </p>
 
-    <h3>可以点的地方</h3>
+    <h3>正式页面</h3>
     <ul>
-      <li><router-link to="/login">登录页</router-link>（正式版，S10 之后仍然用它）</li>
-      <li><router-link to="/register">注册页</router-link></li>
-      <li><a href="/verify/s3-auth.html">S3 接口验证页</a>（能自动复用这里的登录态）</li>
-      <li><a href="/verify/s2-health.html">S2 接口验证页</a></li>
+      <li><router-link to="/login">登录</router-link> / <router-link to="/register">注册</router-link></li>
+      <li><router-link to="/profile">个人中心</router-link>（我发布的 / 我的收藏 / 联系方式设置）</li>
+      <li><router-link to="/seller/2">卖家主页示例</router-link>（游客也能看，但看不到联系方式）</li>
     </ul>
 
-    <h3>验证一下登录态是通的</h3>
+    <h3>接口验证页</h3>
+    <p class="tip">这些是开发期的临时页面，S10 做完真实前端后会整个删掉。</p>
+    <ul>
+      <li><a href="/verify/s2-health.html">S2 后端骨架</a></li>
+      <li><a href="/verify/s3-auth.html">S3 用户模块</a></li>
+      <li><a href="/verify/s4-products.html">S4 分类 + 商品列表/详情</a></li>
+      <li><a href="/verify/s5-publish.html">S5 发布 + 审核</a></li>
+      <li><a href="/verify/s6-contact.html">S6 ⭐ 获取联系方式 + 标记售出</a></li>
+      <li><a href="/verify/s7-favorite.html">S7 收藏 + 行为埋点</a></li>
+    </ul>
+
+    <h3>自动化测试</h3>
     <p class="tip">
-      在登录页登录后回到这里，顶栏应该显示昵称；再打开 S3 验证页，它应该显示「已登录」。
-      这说明三处共享的是同一份 localStorage。
+      在项目根目录执行：<code>node scripts\e2e-test.mjs</code>（浏览器全链路）、
+      <code>node scripts\s7-test.mjs</code>（收藏）、<code>s6-test.mjs</code>、<code>s5-test.mjs</code>。
     </p>
-    <p class="tip">当前页面还很丑是故意的 —— 视觉还原统一放在 S10 阶段做。</p>
+    <p class="tip">页面还很朴素是故意的 —— 视觉还原统一放在 S10 做。</p>
   </main>
 </template>
 
@@ -46,4 +56,5 @@ const isLoggedIn = computed(() => !!token.value)
 .ok { color: #2e7d32; }
 .warn { color: #c62828; }
 .tip { color: #888; font-size: 13px; }
+code { background: #eee; padding: 1px 5px; }
 </style>

@@ -24,9 +24,26 @@ const routes = [
     name: 'register',
     component: () => import('@/views/Register.vue'),
     meta: { title: '注册' }
+  },
+
+  // ---------------- S8：个人中心 + 卖家主页 ----------------
+  {
+    path: '/profile',
+    name: 'profile',
+    component: () => import('@/views/Profile.vue'),
+    // 个人中心全是"我的"数据，必须登录
+    meta: { requiresAuth: true, title: '个人中心' }
+  },
+  {
+    path: '/seller/:id',
+    name: 'seller',
+    component: () => import('@/views/Seller.vue'),
+    // 卖家主页是公开的（游客也能看卖家在卖什么），但页面里不会显示联系方式
+    meta: { title: '卖家主页' }
   }
+
   // 后面阶段会陆续加上：
-  // /products、/products/:id、/publish、/favorites、/profile、/admin/...
+  // /products（S10）、/product/:id（S10）、/publish（S10）、/admin/**（S9）
 ]
 
 const router = createRouter({

@@ -3,12 +3,18 @@ package com.secondhand.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.secondhand.common.BusinessException;
+import com.secondhand.common.ProductStatus;
 import com.secondhand.common.Result;
 import com.secondhand.dto.LoginDTO;
 import com.secondhand.dto.RegisterDTO;
 import com.secondhand.dto.UpdatePasswordDTO;
 import com.secondhand.dto.UpdateProfileDTO;
+import com.secondhand.entity.Favorite;
+import com.secondhand.entity.Product;
 import com.secondhand.entity.User;
+import com.secondhand.mapper.FavoriteMapper;
+import com.secondhand.mapper.ProductMapper;
+import com.secondhand.mapper.UserBehaviorMapper;
 import com.secondhand.mapper.UserMapper;
 import com.secondhand.service.UserService;
 import com.secondhand.util.JwtUtil;
@@ -40,6 +46,11 @@ public class UserServiceImpl implements UserService {
     private final UserMapper userMapper; // final 字段
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
+
+    // 个人中心统计要用到这三张表（S8 补上）
+    private final ProductMapper productMapper;
+    private final FavoriteMapper favoriteMapper;
+    private final UserBehaviorMapper userBehaviorMapper;
 
     // ==================================================================
     //  注册
@@ -125,8 +136,7 @@ public class UserServiceImpl implements UserService {
         }
 
         UserVO vo = toVO(user);
-        // TODO(S8)：接入 product / favorite / user_behavior 的真实统计
-        vo.setStats(UserStatsVO.empty());
+        vo.setStats(buildStats(userId));
         return vo;
     }
 
@@ -237,5 +247,44 @@ public class UserServiceImpl implements UserService {
     /** 空白字符串统一转成 null，避免库里出现 "" 和 NULL 两种"空" */
     private String blankToNull(String value) {
         return StringUtils.hasText(value) ? value.trim() : null;
+    }
+
+    /**
+     * 个人中心的统计数字（S8 补齐；S3 时这几个只是占位的 0）。
+     *
+     * <p>五个数字各自回答一个问题：
+     * <ul>
+     *   <li>{@code publishedCount} —— 我一共发过多少件</li>
+     *   <li>{@code onSaleCount} —— 现在还有几件在卖</li>
+     *   <li>{@code soldCount} —— 已经卖掉几件</li>
+     *   <li>{@code favoriteCount} —— 我自己收藏了别人多少件</li>
+     *   <li>{@code receivedContactCount} —— ⭐ <b>有多少人想要我的东西</b>（去重）</li>
+     * </ul>
+     *
+     * <p>最后一个是最关键的：平台没有订单，所以"被多少人咨询过"
+     * 就是卖家能看到的、最接近成交的信号。
+     */
+    private UserStatsVO buildStats(Integer userId) {
+        UserStatsVO stats = new UserStatsVO();
+        stats.setPublishedCount(countMyProducts(userId, null));
+        stats.setOnSaleCount(countMyProducts(userId, ProductStatus.ON_SALE.getCode()));
+        stats.setSoldCount(countMyProducts(userId, ProductStatus.SOLD.getCode()));
+
+        stats.setFavoriteCount(favoriteMapper.selectCount(
+                new LambdaQueryWrapper<Favorite>().eq(Favorite::getUserId, userId)));
+
+        // 这一条是对"我的商品被别人咨询"的去重计数，走自定义 SQL（JOIN 比 IN 长列表更稳）
+        Long received = userBehaviorMapper.countReceivedContacts(userId);
+        stats.setReceivedContactCount(received == null ? 0L : received);
+
+        return stats;
+    }
+
+    /** 统计我发布的商品数；status 传 null 表示不按状态过滤 */
+    private Long countMyProducts(Integer userId, Integer status) {
+        Long count = productMapper.selectCount(new LambdaQueryWrapper<Product>()
+                .eq(Product::getSellerId, userId)
+                .eq(status != null, Product::getStatus, status));
+        return count == null ? 0L : count;
     }
 }
