@@ -39,6 +39,9 @@ function logout() {
       <span class="spacer"></span>
 
       <template v-if="isLoggedIn">
+        <!-- 管理后台入口只给管理员看。⚠️ 这只是界面上的方便，
+             真正的权限在路由守卫（requiresAdmin）和后端 AdminInterceptor 上 -->
+        <router-link v-if="user?.role === 'admin'" to="/admin" class="admin-entry">管理后台</router-link>
         <router-link to="/profile">个人中心</router-link>
         <span class="who">你好，{{ user?.nickname || user?.username }}</span>
         <a href="#" @click.prevent="logout">退出登录</a>
@@ -66,4 +69,12 @@ function logout() {
 .spacer { flex: 1; }
 .who { color: #ddd; font-size: 14px; }
 .topbar a { color: #ffd100; }
+.admin-entry {
+  padding: 2px 10px;
+  background: #ffd100;
+  color: #2b2b2b !important;
+  border-radius: 3px;
+  font-size: 13px;
+  font-weight: bold;
+}
 </style>

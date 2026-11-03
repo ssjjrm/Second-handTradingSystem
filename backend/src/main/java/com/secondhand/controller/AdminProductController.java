@@ -61,4 +61,27 @@ public class AdminProductController {
         adminProductService.reject(id, reason);
         return Result.success("已拒绝该商品", null);
     }
+
+    /**
+     * 10.4 全部商品：含所有状态，可按 status / keyword 筛选。
+     *
+     * <p>三个参数都是可选的 —— {@code status} 不传就是"全状态"，
+     * {@code keyword} 不传就是"不过滤关键词"。
+     * 后台的筛选栏天然是"点一下才生效"，所以没有必要给它们设默认值。
+     */
+    @GetMapping
+    public Result<PageVO<ProductAdminVO>> listAll(
+            @RequestParam(defaultValue = "1") Integer page,
+            @RequestParam(defaultValue = "10") Integer size,
+            @RequestParam(required = false) Integer status,
+            @RequestParam(required = false) String keyword) {
+        return Result.success(adminProductService.listAll(page, size, status, keyword));
+    }
+
+    /** 10.5 强制下架：管理员可以下架**任何人**发布的商品（处理违规） */
+    @PutMapping("/{id}/off-shelf")
+    public Result<Void> offShelf(@PathVariable Integer id) {
+        adminProductService.forceOffShelf(id);
+        return Result.success("已强制下架该商品", null);
+    }
 }

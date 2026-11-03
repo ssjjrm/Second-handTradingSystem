@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>S9 管理后台 - 接口验证</title>
+  <style>
+    body { font-family: Consolas, monospace; margin: 20px; max-width: 1280px; }
+    fieldset { margin-bottom: 14px; padding: 12px; border: 1px solid #ccc; }
+    legend { font-weight: bold; }
+    input, select { margin: 4px; padding: 4px; }
+    button { margin: 4px; padding: 6px 14px; cursor: pointer; }
+    pre { background: #f5f5f5; padding: 10px; max-height: 380px; overflow: auto; }
+    .ok { color: #2e7d32; font-weight: bold; }
+    .bad { color: #c62828; font-weight: bold; }
+    .hint { color: #666; font-size: 13px; }
+    code { background: #eee; padding: 1px 4px; }
+    table { border-collapse: collapse; font-size: 13px; margin-top: 8px; }
+    th, td { border: 1px solid #ddd; padding: 3px 8px; }
+    .st0 { background: #fff7e6; color: #d46b08; }
+    .st1 { background: #f6ffed; color: #389e0d; }
+    .st2 { background: #f0f0f0; color: #888; }
+    .st3 { background: #f0f0f0; color: #888; }
+    .st4 { background: #fff1f0; color: #cf1322; }
+    .off { background: #eee; }
+  </style>
+</head>
+<body>
+  <h1>S9 管理后台 · 接口验证</h1>
+  <p class="hint">
+    打开方式：<b>http://localhost:5174/verify/s9-admin.html</b><br>
+    <b>必须先用 admin / admin123 在 /login 登录</b>（普通用户访问会全部 403，这本身就是一条要验的东西）。
+  </p>
+  <p>当前登录：<code id="stat">检查中…</code>　<a href="/login">换账号</a></p>
+
+  <fieldset>
+    <legend>1. 待审核商品 + 通过 / 拒绝（§10.1~10.3，S5 已做，这里复核）</legend>
+    <button onclick="loadPending()">GET /api/admin/products/pending</button>
+    <span class="hint">审核接口是 0 → 1（通过）或 0 → 4（拒绝），不是待审状态一律 400</span>
+    <div id="pendingBox"></div>
+  </fieldset>
+
+  <fieldset>
+    <legend>2. 全部商品（§10.4）</legend>
+    状态
+    <select id="qStatus">
+      <option value="">全部</option>
+      <option value="0">0 待审核</option>
+      <option value="1">1 在售</option>
+      <option value="2">2 已售出</option>
+      <option value="3">3 已下架</option>
+      <option value="4">4 已拒绝</option>
+    </select>
+    关键词 <input id="qKeyword" size="14" placeholder="标题/描述/品牌">
+    <button onclick="loadAll()">GET /api/admin/products</button>
+    <span class="hint">注意这里能看到 <b>所有状态</b>，C 端列表只有 1 和 2</span>
+    <div id="allBox"></div>
+  </fieldset>
+
+  <fieldset>
+    <legend>3. 强制下架（§10.5）</legend>
+    商品 id <input id="offId" size="6" placeholder="填一个在售商品的 id">
+    <button onclick="forceOff()">PUT /api/admin/products/{id}/off-shelf</button>
+    <span class="hint">要验的是：<b>下架别人（比如 student01）发的商品也能成功</b> —— 管理员权限高于商品所有者。已售出/已下架的再下架应 400</span>
+  </fieldset>
+
+  <fieldset>
+    <legend>4. 咨询记录（§10.6，替代原「订单管理」）</legend>
+    类型
+    <select id="qType">
+      <option value="">全部</option>
+      <option value="1">1 浏览</option>
+      <option value="2">2 收藏</option>
+      <option value="3" selected>3 咨询</option>
+      <option value="4">4 取消收藏</option>
+    </select>
+    商品 id <input id="qPid" size="6" placeholder="可空">
+    用户 id <input id="qUid" size="6" placeholder="可空">
+    <button onclick="loadBehaviors()">GET /api/admin/behaviors</button>
+    <span class="hint">重点看 <code>summary</code> 四个数：它们必须是<b>全站总量</b>，不受上面筛选影响</span>
+    <div id="behBox"></div>
+  </fieldset>
+
+  <fieldset>
+    <legend>5. 用户列表（§10.7）</legend>
+    关键词 <input id="qUserKw" size="14" placeholder="用户名/昵称">
+    <button onclick="loadUsers()">GET /api/admin/users</button>
+    <span class="hint">要验的：<b>响应里没有 password</b>，但<b>有</b> wechat / qq（管理员可见）</span>
+    <div id="userBox"></div>
+  </fieldset>
+
+  <fieldset>
+    <legend>6. 禁用 / 启用（§10.8）</legend>
+    用户 id <input id="stuId" size="6" value="5">
+    <button onclick="setStatus(0)">禁用（status=0）</button>
+    <button onclick="setStatus(1)">启用（status=1）</button>
+    <button onclick="disableSelf()">⚠️ 禁用我自己（应 400）</button>
+    <span class="hint">禁用后该账号登录返回 <b>403「账号已被禁用」</b>；已登录的旧 token 也会立刻失效（拦截器每次请求都查库）</span>
+    <div id="stuBox"></div>
+  </fieldset>
+
+  <fieldset>
+    <legend>7. 数据统计（§10.9）</legend>
+    <button onclick="loadStats()">GET /api/admin/stats</button>
+    <span class="hint">10 个数字要和数据库 <code>COUNT(*)</code> 对得上；<b>没有「成交额」</b>是刻意的</span>
+    <div id="statsBox"></div>
+  </fieldset>
+
+  <fieldset>
+    <legend>8. 权限反证（普通用户 / 游客）</legend>
+    <button onclick="checkForbidden()">怎么验证普通人进不来？</button>
+  </fieldset>
+
+  <h3>响应</h3>
+  <pre id="out">（点上面的按钮）</pre>
+
+<script>
+const BASE = '';
+const out = document.getElementById('out');
+
+function token() { return localStorage.getItem('token') || ''; }
+function headers() {
+  return {
+    'Content-Type': 'application/json',
+    ...(token() ? { Authorization: 'Bearer ' + token() } : {})
+  };
+}
+
+function refreshStat() {
+  const el = document.getElementById('stat');
+  const u = JSON.parse(localStorage.getItem('user') || 'null');
+  if (token() && u?.role === 'admin') {
+    el.textContent = `${u.username}（${u.role}）✅ 管理员`;
+    el.className = 'ok';
+  } else if (token()) {
+    el.textContent = `${u?.username}（${u?.role}）—— 不是管理员，本页所有接口都会 403`;
+    el.className = 'bad';
+  } else {
+    el.textContent = '未登录 —— 请先用 admin / admin123 登录';
+    el.className = 'bad';
+  }
+}
+
+async function call(method, url, body) {
+  out.textContent = `→ ${method} ${url}\n\n`;
+  try {
+    const res = await fetch(BASE + url, {
+      method, headers: headers(),
+      body: body ? JSON.stringify(body) : undefined
+    });
+    const text = await res.text();
+    let pretty = text;
+    try { pretty = JSON.stringify(JSON.parse(text), null, 2); } catch (e) {}
+    out.textContent += `← HTTP ${res.status}\n\n` + pretty;
+    let json = null;
+    try { json = JSON.parse(text); } catch (e) {}
+    return { status: res.status, json };
+  } catch (e) {
+    out.textContent += '❌ 请求失败：' + e.message;
+    return null;
+  }
+}
+
+const STATUS_TEXT = { 0: '待审核', 1: '在售', 2: '已售出', 3: '已下架', 4: '已拒绝' };
+
+// ---------------- 1. 待审核 ----------------
+async function loadPending() {
+  const r = await call('GET', '/api/admin/products/pending?size=50');
+  const box = document.getElementById('pendingBox');
+  box.innerHTML = '';
+  if (r?.json?.code !== 200) { box.innerHTML = '<p class="bad">请求失败，先确认已用 admin 登录</p>'; return; }
+
+  const rows = r.json.data.records;
+  if (!rows.length) { box.innerHTML = '<p class="hint">没有待审核商品（可以自己发一件再回来）</p>'; return; }
+
+  const table = document.createElement('table');
+  table.innerHTML = '<tr><th>id</th><th>标题</th><th>价格</th><th>卖家</th><th>操作</th></tr>';
+  rows.forEach((p) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${p.id}</td>
+      <td>${(p.title || '').slice(0, 30)}</td>
+      <td>¥${p.price}</td>
+      <td>${p.seller?.nickname ?? p.sellerId}</td>
+      <td><button onclick="approve(${p.id})">通过</button>
+          <button onclick="reject(${p.id})">拒绝</button></td>`;
+    table.appendChild(tr);
+  });
+  box.appendChild(table);
+}
+
+async function approve(id) {
+  await call('PUT', `/api/admin/products/${id}/approve`);
+  loadPending();
+}
+
+async function reject(id) {
+  await call('PUT', `/api/admin/products/${id}/reject`, { reason: '验证页测试拒绝' });
+  loadPending();
+}
+
+// ---------------- 2. 全部商品 ----------------
+async function loadAll() {
+  const status = document.getElementById('qStatus').value;
+  const keyword = document.getElementById('qKeyword').value.trim();
+  const qs = new URLSearchParams({ page: 1, size: 20 });
+  if (status !== '') qs.append('status', status);
+  if (keyword) qs.append('keyword', keyword);
+
+  const r = await call('GET', '/api/admin/products?' + qs.toString());
+  const box = document.getElementById('allBox');
+  box.innerHTML = '';
+  if (r?.json?.code !== 200) return;
+
+  const d = r.json.data;
+  const table = document.createElement('table');
+  table.innerHTML = '<tr><th>id</th><th>标题</th><th>价格</th><th>状态</th><th>卖家</th><th>操作</th></tr>';
+  d.records.forEach((p) => {
+    const tr = document.createElement('tr');
+    const canOff = p.status === 1;
+    tr.innerHTML = `<td>${p.id}</td>
+      <td>${(p.title || '').slice(0, 26)}</td>
+      <td>¥${p.price}</td>
+      <td class="st${p.status}">${p.statusText}</td>
+      <td>${p.seller?.nickname ?? p.sellerId}</td>
+      <td>${canOff ? `<button onclick="offOne(${p.id})">强制下架</button>` : '<span class="hint">-</span>'}</td>`;
+    table.appendChild(tr);
+  });
+  box.appendChild(table);
+  box.insertAdjacentHTML('beforeend',
+    `<p class="hint">共 ${d.total} 条（所有状态都算），当前第 ${d.current}/${d.pages} 页</p>`);
+}
+
+async function offOne(id) {
+  document.getElementById('offId').value = id;
+  await forceOff();
+  loadAll();
+}
+
+// ---------------- 3. 强制下架 ----------------
+async function forceOff() {
+  const id = document.getElementById('offId').value.trim();
+  if (!id) return;
+  const r = await call('PUT', `/api/admin/products/${id}/off-shelf`);
+  if (r?.status === 200) {
+    out.textContent += '\n\n✅ 成功。注意：管理员能下架<b>任何人</b>的商品，这是和 C 端「下架自己的」最大的区别。';
+  } else {
+    out.textContent += '\n\n（400 通常意味着这件商品已经不在售了 —— 已售出/已下架/待审核都不能强制下架）';
+  }
+}
+
+// ---------------- 4. 咨询记录 ----------------
+async function loadBehaviors() {
+  const type = document.getElementById('qType').value;
+  const pid = document.getElementById('qPid').value.trim();
+  const uid = document.getElementById('qUid').value.trim();
+  const qs = new URLSearchParams({ page: 1, size: 20 });
+  if (type !== '') qs.append('behaviorType', type);
+  if (pid) qs.append('productId', pid);
+  if (uid) qs.append('userId', uid);
+
+  const r = await call('GET', '/api/admin/behaviors?' + qs.toString());
+  const box = document.getElementById('behBox');
+  box.innerHTML = '';
+  if (r?.json?.code !== 200) return;
+
+  const d = r.json.data;
+  const s = d.summary || {};
+  box.insertAdjacentHTML('beforeend', `<p>
+    <b>全站汇总</b>：浏览 ${s.viewCount} / 收藏 ${s.favoriteCount} /
+    <b class="ok">咨询 ${s.contactCount}</b> / 取消收藏 ${s.unfavoriteCount}
+    <span class="hint">（这四个数不受上面筛选影响）</span></p>`);
+
+  const table = document.createElement('table');
+  table.innerHTML = '<tr><th>id</th><th>时间</th><th>类型</th><th>用户</th><th>商品</th><th>价格</th></tr>';
+  d.records.forEach((b) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${b.id}</td>
+      <td>${(b.behaviorTime || '').replace('T', ' ').slice(0, 19)}</td>
+      <td>${b.behaviorTypeText}</td>
+      <td>${b.userNickname ?? b.userId}</td>
+      <td>${(b.productTitle || '').slice(0, 26)}</td>
+      <td>¥${b.productPrice ?? '-'}</td>`;
+    table.appendChild(tr);
+  });
+  box.appendChild(table);
+  box.insertAdjacentHTML('beforeend', `<p class="hint">共 ${d.total} 条</p>`);
+}
+
+// ---------------- 5. 用户列表 ----------------
+async function loadUsers() {
+  const kw = document.getElementById('qUserKw').value.trim();
+  const qs = new URLSearchParams({ page: 1, size: 50 });
+  if (kw) qs.append('keyword', kw);
+
+  const r = await call('GET', '/api/admin/users?' + qs.toString());
+  const box = document.getElementById('userBox');
+  box.innerHTML = '';
+  if (r?.json?.code !== 200) return;
+
+  const d = r.json.data;
+  // 自己做一个"泄漏检查"，比肉眼扫 JSON 更可靠
+  const leaked = d.records.some((u) => 'password' in u);
+  box.insertAdjacentHTML('beforeend', leaked
+    ? '<p class="bad">✗ 响应里出现了 password 字段！</p>'
+    : '<p class="ok">✅ 响应里没有 password（AdminUserVO 类型上就没有这个字段）</p>');
+
+  const table = document.createElement('table');
+  table.innerHTML = '<tr><th>id</th><th>用户名</th><th>昵称</th><th>微信</th><th>QQ</th><th>角色</th><th>状态</th><th>发布/已售/收藏</th></tr>';
+  d.records.forEach((u) => {
+    const tr = document.createElement('tr');
+    if (u.status === 0) tr.className = 'off';
+    tr.innerHTML = `<td>${u.id}</td>
+      <td>${u.username}</td>
+      <td>${u.nickname ?? '-'}</td>
+      <td>${u.wechat ?? '-'}</td>
+      <td>${u.qq ?? '-'}</td>
+      <td>${u.role}</td>
+      <td>${u.statusText}</td>
+      <td>${u.publishedCount} / ${u.soldCount} / ${u.favoriteCount}</td>`;
+    table.appendChild(tr);
+  });
+  box.appendChild(table);
+  box.insertAdjacentHTML('beforeend', `<p class="hint">共 ${d.total} 个用户</p>`);
+}
+
+// ---------------- 6. 禁用 / 启用 ----------------
+async function setStatus(status) {
+  const id = document.getElementById('stuId').value.trim();
+  if (!id) return;
+  const r = await call('PUT', `/api/admin/users/${id}/status?status=${status}`);
+  const box = document.getElementById('stuBox');
+  box.innerHTML = r?.status === 200
+    ? `<p class="ok">✅ 已${status === 1 ? '启用' : '禁用'}用户 ${id}。请到 /login 用该账号试一下：${status === 1 ? '应该能登录' : '应该返回 403「账号已被禁用」'}</p>`
+    : `<p class="bad">失败（HTTP ${r?.status}）：${r?.json?.message}</p>`;
+  loadUsers();
+}
+
+async function disableSelf() {
+  const me = JSON.parse(localStorage.getItem('user') || 'null');
+  if (!me) { out.textContent = '先登录'; return; }
+  const r = await call('PUT', `/api/admin/users/${me.id}/status?status=0`);
+  const box = document.getElementById('stuBox');
+  box.innerHTML = r?.status === 400
+    ? `<p class="ok">✅ 正确地被拒绝了：${r.json.message}（「管理员不能禁用自己」这条规则生效）</p>`
+    : `<p class="bad">✗ 期望 400，实际 HTTP ${r?.status} —— 这条规则没生效！</p>`;
+}
+
+// ---------------- 7. 数据统计 ----------------
+async function loadStats() {
+  const r = await call('GET', '/api/admin/stats');
+  const box = document.getElementById('statsBox');
+  box.innerHTML = '';
+  if (r?.json?.code !== 200) return;
+
+  const d = r.json.data;
+  const items = [
+    ['用户总数', d.totalUsers], ['今日新增用户', d.todayNewUsers],
+    ['商品总数（所有状态）', d.totalProducts], ['在售', d.onSaleProducts],
+    ['已售出（成交量代理指标）', d.soldProducts], ['待审核（后台待办）', d.pendingProducts],
+    ['今日新增商品', d.todayNewProducts], ['收藏总记录数', d.totalFavoriteRecords],
+    ['咨询总次数', d.totalContactRecords], ['今日咨询', d.todayContacts]
+  ];
+  const table = document.createElement('table');
+  table.innerHTML = '<tr><th>指标</th><th>数值</th></tr>';
+  items.forEach(([k, v]) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${k}</td><td>${v}</td>`;
+    table.appendChild(tr);
+  });
+  box.appendChild(table);
+  box.insertAdjacentHTML('beforeend',
+    '<p class="hint">⚠️ 没有「成交额」—— 平台不参与交易，无法得知真实成交价，这是需求文档 §4.2.5 记录的已知代价。</p>');
+}
+
+// ---------------- 8. 权限反证 ----------------
+function checkForbidden() {
+  out.textContent = '两种反证方式：\n\n'
+    + '① 界面方式（最简单）：\n'
+    + '   到 /login 换成一个普通用户（student01 / 123456），再打开本页 →\n'
+    + '   所有按钮都会返回 HTTP 403 { code:403, message:"需要管理员权限" }\n\n'
+    + '② 命令行方式（连 token 都不带，模拟游客）：\n'
+    + '   curl -i http://localhost:8081/api/admin/stats\n'
+    + '   期望 HTTP 401 { code:401, message:"请先登录" }\n\n'
+    + '为什么 401 和 403 要分开：\n'
+    + '   401 = 我不知道你是谁 → 前端跳登录页\n'
+    + '   403 = 我知道你是谁，但你没权限 → 前端提示"无权限"，不跳登录\n\n'
+    + '另外注意：把「管理后台」入口从前端藏起来不算权限控制 ——\n'
+    + '任何人手工敲 URL 都能绕过，真正的门在 AdminInterceptor 上。';
+}
+
+refreshStat();
+</script>
+</body>
+</html>

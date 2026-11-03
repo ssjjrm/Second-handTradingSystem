@@ -40,10 +40,53 @@ const routes = [
     component: () => import('@/views/Seller.vue'),
     // 卖家主页是公开的（游客也能看卖家在卖什么），但页面里不会显示联系方式
     meta: { title: '卖家主页' }
+  },
+
+  // ---------------- S9：管理后台（嵌套路由） ----------------
+  //
+  // 用"父路由 + children"而不是 5 个平级路由，好处是导航栏只写一份。
+  // ⚠️ requiresAdmin 写在**父路由**上就够了：vue-router 的 to.meta 是
+  //    父路由和子路由 meta 合并后的结果，所以 5 个子页面自动都受保护。
+  {
+    path: '/admin',
+    component: () => import('@/views/admin/AdminLayout.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true, title: '管理后台' },
+    children: [
+      {
+        path: '',
+        name: 'admin-stats',
+        component: () => import('@/views/admin/AdminStats.vue'),
+        meta: { title: '数据统计' }
+      },
+      {
+        path: 'review',
+        name: 'admin-review',
+        component: () => import('@/views/admin/AdminReview.vue'),
+        meta: { title: '商品审核' }
+      },
+      {
+        path: 'products',
+        name: 'admin-products',
+        component: () => import('@/views/admin/AdminProducts.vue'),
+        meta: { title: '商品管理' }
+      },
+      {
+        path: 'behaviors',
+        name: 'admin-behaviors',
+        component: () => import('@/views/admin/AdminBehaviors.vue'),
+        meta: { title: '咨询记录' }
+      },
+      {
+        path: 'users',
+        name: 'admin-users',
+        component: () => import('@/views/admin/AdminUsers.vue'),
+        meta: { title: '用户管理' }
+      }
+    ]
   }
 
   // 后面阶段会陆续加上：
-  // /products（S10）、/product/:id（S10）、/publish（S10）、/admin/**（S9）
+  // /products（S10）、/product/:id（S10）、/publish（S10）
 ]
 
 const router = createRouter({

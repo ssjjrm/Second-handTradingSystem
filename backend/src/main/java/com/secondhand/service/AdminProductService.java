@@ -25,4 +25,20 @@ public interface AdminProductService {
 
     /** 10.3 审核拒绝：status 0 → 4 */
     void reject(Integer productId, String reason);
+
+    /**
+     * 10.4 全部商品（S9 补）。
+     *
+     * @param status  为 null 表示不限状态；否则只看这一种
+     * @param keyword 标题 / 描述 / 品牌模糊匹配，可为空
+     */
+    PageVO<ProductAdminVO> listAll(Integer page, Integer size, Integer status, String keyword);
+
+    /**
+     * 10.5 强制下架（S9 补）：status 1 → 3。
+     *
+     * <p>和 C 端的 {@code offShelf} 是两件事：
+     * 那个只能下架自己的商品，这个**可以下架任何人的**（处理违规商品）。
+     */
+    void forceOffShelf(Integer productId);
 }

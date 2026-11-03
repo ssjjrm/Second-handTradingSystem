@@ -3,6 +3,7 @@ package com.secondhand.vo;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import java.util.List;
 import java.util.function.Function;
@@ -21,6 +22,7 @@ import java.util.stream.Collectors;
  */
 @Data
 @AllArgsConstructor
+@NoArgsConstructor
 public class PageVO<T> {
 
     /** 当前页数据 */

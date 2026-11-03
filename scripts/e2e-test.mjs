@@ -565,6 +565,150 @@ async function main() {
     const cards = await cdp.eval('document.querySelectorAll(".grid .card").length')
     check('卖家在售商品以卡片展示', cards > 0, `${cards} 张卡片`)
 
+    // ================= 13. S9 管理后台（5 个模块 + 路由守卫）=================
+    console.log('\n[13] S9 页面：管理后台 5 个模块 + requiresAdmin 守卫')
+
+    // 先用 admin 登录（第 12 步的登录是 student01）
+    await cdp.eval(`(async () => {
+      const r = await fetch('/api/auth/login', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: 'admin', password: 'admin123' })
+      });
+      const j = await r.json();
+      localStorage.setItem('token', j.data.token);
+      localStorage.setItem('user', JSON.stringify(j.data.user));
+      return true;
+    })()`)
+
+    // ---------- 13.1 顶栏出现"管理后台"入口 ----------
+    await cdp.send('Page.navigate', { url: FRONT + '/' })
+    await sleep(1800)
+    const adminEntry = await cdp.eval(
+      '[...document.querySelectorAll(".topbar a")].some(a => a.textContent.includes("管理后台"))')
+    check('管理员顶栏出现「管理后台」入口', adminEntry === true)
+
+    // ---------- 13.2 数据统计首页 ----------
+    await cdp.send('Page.navigate', { url: FRONT + '/admin' })
+    await sleep(2200)
+
+    const sideLinks = await cdp.eval(
+      '[...document.querySelectorAll(".side nav a")].map(a => a.textContent.trim().split(/\\s+/)[0]).join("|")')
+    check('侧边栏有 5 个模块',
+      ['数据统计', '商品审核', '商品管理', '咨询记录', '用户管理']
+        .every((m) => sideLinks.includes(m)), sideLinks)
+
+    const statCards = await cdp.eval('document.querySelectorAll(".card b").length')
+    check('统计页渲染出数字卡片', statCards >= 10, `${statCards} 张卡片`)
+
+    const statsText = await cdp.eval('document.querySelector(".body")?.innerText || ""')
+    check('统计页明确说明「没有成交额」', statsText.includes('没有「成交额」'))
+    check('统计页有「已售出（成交量代理）」指标', statsText.includes('成交量代理'))
+
+    // ---------- 13.3 商品审核 ----------
+    await cdp.send('Page.navigate', { url: FRONT + '/admin/review' })
+    await sleep(1800)
+    const reviewTitle = await cdp.eval('document.querySelector("h2")?.textContent || ""')
+    check('商品审核页能加载', reviewTitle.includes('商品审核'), `"${reviewTitle.trim()}"`)
+
+    // ---------- 13.4 商品管理（表格 + 状态筛选 + 强制下架按钮）----------
+    await cdp.send('Page.navigate', { url: FRONT + '/admin/products' })
+    await sleep(2000)
+    const prodRows = await cdp.eval('document.querySelectorAll("tbody tr").length')
+    check('商品管理表格有数据', prodRows > 0, `${prodRows} 行`)
+
+    const hasOffBtn = await cdp.eval(
+      '[...document.querySelectorAll("tbody button")].some(b => b.textContent.includes("强制下架"))')
+    check('在售商品带「强制下架」按钮', hasOffBtn === true)
+
+    // 用状态筛选走一遍（选「已售出」应该也能筛出来）
+    const filterCheck = await cdp.eval(`(async () => {
+      const sel = document.querySelector('.toolbar select')
+      sel.value = '2'
+      sel.dispatchEvent(new Event('change', { bubbles: true }))
+      await new Promise(r => setTimeout(r, 800))
+      const statuses = [...document.querySelectorAll('tbody tr')].map(tr => tr.children[4]?.textContent.trim())
+      return statuses.every(s => s === '已售出') + '|' + statuses.length
+    })()`)
+    check('按状态筛选生效（选「已售出」列表全是已售出）',
+      filterCheck.startsWith('true|'), filterCheck)
+
+    // ---------- 13.5 咨询记录（summary + 默认只看咨询）----------
+    await cdp.send('Page.navigate', { url: FRONT + '/admin/behaviors' })
+    await sleep(2000)
+    const summaryNums = await cdp.eval('document.querySelectorAll(".summary .sum").length')
+    check('咨询记录页有 4 个全站汇总数字', summaryNums === 4, `${summaryNums} 个`)
+
+    const typeCells = await cdp.eval(
+      '[...document.querySelectorAll("tbody tr")].map(tr => tr.children[2]?.textContent.trim())')
+    check('默认筛选 behaviorType=3，列表全是「咨询」',
+      typeCells.length > 0 && typeCells.every((t) => t === '咨询'),
+      `${typeCells.length} 行`)
+
+    const behText = await cdp.eval('document.querySelector(".summary")?.innerText || ""')
+    check('汇总里有「咨询（≈成交意向）」', behText.includes('成交意向'))
+
+    // ---------- 13.6 用户管理（管理员可见联系方式，但看不到密码）----------
+    await cdp.send('Page.navigate', { url: FRONT + '/admin/users' })
+    await sleep(2000)
+    const userRows = await cdp.eval('document.querySelectorAll("tbody tr").length')
+    check('用户管理表格有数据', userRows > 0, `${userRows} 行`)
+
+    const headers = await cdp.eval(
+      '[...document.querySelectorAll("thead th")].map(th => th.textContent.trim()).join("|")')
+    check('表头含微信 / QQ / 手机号（管理员可见）',
+      headers.includes('微信') && headers.includes('QQ') && headers.includes('手机号'), headers)
+    check('表头【不含】密码列', !headers.includes('密码'))
+
+    const userPageText = await cdp.eval('document.querySelector(".body")?.innerText || ""')
+    check('页面提示禁用会立即生效', userPageText.includes('立即生效'))
+
+    const selfDisabled = await cdp.eval(`(() => {
+      const mine = [...document.querySelectorAll('tbody tr')]
+        .find(tr => tr.innerText.includes('当前登录账号'))
+      const btn = mine?.querySelector('button')
+      return btn ? btn.disabled : null
+    })()`)
+    check('当前登录账号（管理员自己）的禁用按钮是灰的', selfDisabled === true,
+      `disabled=${selfDisabled}`)
+
+    // ---------- 13.7 requiresAdmin 守卫：普通用户进不去 ----------
+    await cdp.eval(`(async () => {
+      const r = await fetch('/api/auth/login', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: 'student01', password: '123456' })
+      });
+      const j = await r.json();
+      localStorage.setItem('token', j.data.token);
+      localStorage.setItem('user', JSON.stringify(j.data.user));
+      return true;
+    })()`)
+
+    await cdp.send('Page.navigate', { url: FRONT + '/admin' })
+    await sleep(2000)
+    const blockedPath = await cdp.eval('location.pathname')
+    check('普通用户访问 /admin 被守卫弹回首页', blockedPath === '/', `当前路径 ${blockedPath}`)
+
+    const noAdminEntry = await cdp.eval(
+      '[...document.querySelectorAll(".topbar a")].some(a => a.textContent.includes("管理后台"))')
+    check('普通用户顶栏没有「管理后台」入口', noAdminEntry === false)
+
+    // 后端那道门同样在（前端藏起来只是界面效果）
+    const backendGuard = await cdp.eval(`(async () => {
+      const r = await fetch('/api/admin/stats', {
+        headers: { Authorization: 'Bearer ' + localStorage.getItem('token') }
+      });
+      const j = await r.json();
+      return r.status + '|' + j.code + '|' + j.message;
+    })()`)
+    check('普通用户直接请求后台接口 → HTTP 403 + code 403',
+      backendGuard.startsWith('403|403|'), backendGuard)
+
+    // ---------- 13.8 S9 验证页能打开 ----------
+    await cdp.send('Page.navigate', { url: FRONT + '/verify/s9-admin.html' })
+    await sleep(1500)
+    const s9Title = await cdp.eval('document.querySelector("h1")?.textContent || ""')
+    check('S9 验证页能加载', s9Title.includes('S9'), `"${s9Title.trim()}"`)
+
     ws.close()
   } finally {
     browser.kill()
