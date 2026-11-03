@@ -1,80 +1,55 @@
 <script setup>
-import { computed, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { computed, watch } from 'vue'
+import { useRoute } from 'vue-router'
+import AppHeader from '@/components/layout/AppHeader.vue'
+import NoticeBar from '@/components/layout/NoticeBar.vue'
+import FloatingBar from '@/components/layout/FloatingBar.vue'
+import AppFooter from '@/components/layout/AppFooter.vue'
+import AppToast from '@/components/common/AppToast.vue'
+import { useUser } from '@/composables/useUser'
 
 /**
- * 根组件：只负责顶栏 + 路由出口。
+ * 根组件 = 全站骨架。
  *
- * 顶栏要显示登录状态，但 localStorage 不是响应式的 ——
- * 登录页写入 token 后，这里不会自己变。所以用 watch 监听路由变化时重新同步一次。
- * （更正规的做法是引入 Pinia，等 S8 个人中心再上也不迟。）
+ * 结构：
+ *   顶栏（黄）
+ *   公告条（管理后台不显示）
+ *   <router-view/>  ← 各页面自己写内容
+ *   页脚（管理后台不显示）
+ *
+ * 悬浮条 + toast 是全局的，永远挂在最外层。
+ *
+ * ⚠️ localStorage 不是响应式的，所以监听路由变化时重新同步一次登录态 ——
+ * 登录页写入 token 后，顶栏才会从"登录/注册"变成"头像 + 昵称"。
  */
 const route = useRoute()
-const router = useRouter()
-
-const user = ref(JSON.parse(localStorage.getItem('user') || 'null'))
-const token = ref(localStorage.getItem('token') || '')
-
-const isLoggedIn = computed(() => !!token.value)
-
-function sync() {
-  user.value = JSON.parse(localStorage.getItem('user') || 'null')
-  token.value = localStorage.getItem('token') || ''
-}
+const { sync } = useUser()
 
 watch(() => route.fullPath, sync)
 
-function logout() {
-  localStorage.removeItem('token')
-  localStorage.removeItem('user')
-  sync()
-  router.push('/login')
-}
+/** 管理后台有自己的侧边栏，不需要公告条和页脚 */
+const isAdminArea = computed(() => route.path.startsWith('/admin'))
 </script>
 
 <template>
   <div class="page">
-    <header class="topbar">
-      <router-link to="/" class="brand">校园二手</router-link>
-      <span class="spacer"></span>
+    <AppHeader />
 
-      <template v-if="isLoggedIn">
-        <!-- 管理后台入口只给管理员看。⚠️ 这只是界面上的方便，
-             真正的权限在路由守卫（requiresAdmin）和后端 AdminInterceptor 上 -->
-        <router-link v-if="user?.role === 'admin'" to="/admin" class="admin-entry">管理后台</router-link>
-        <router-link to="/profile">个人中心</router-link>
-        <span class="who">你好，{{ user?.nickname || user?.username }}</span>
-        <a href="#" @click.prevent="logout">退出登录</a>
-      </template>
-      <template v-else>
-        <router-link to="/login">登录</router-link>
-        <router-link to="/register">注册</router-link>
-      </template>
-    </header>
+    <NoticeBar v-if="!isAdminArea" />
 
     <router-view />
+
+    <AppFooter v-if="!isAdminArea" />
+
+    <FloatingBar v-if="!isAdminArea" />
+    <AppToast />
   </div>
 </template>
 
 <style scoped>
-.topbar {
+.page {
   display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 12px 20px;
-  background: #2b2b2b;
-  color: #fff;
-}
-.brand { color: #ffd100; font-weight: bold; }
-.spacer { flex: 1; }
-.who { color: #ddd; font-size: 14px; }
-.topbar a { color: #ffd100; }
-.admin-entry {
-  padding: 2px 10px;
-  background: #ffd100;
-  color: #2b2b2b !important;
-  border-radius: 3px;
-  font-size: 13px;
-  font-weight: bold;
+  flex-direction: column;
+  min-height: 100vh;
 }
 </style>

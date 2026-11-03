@@ -597,6 +597,56 @@
 
 <!-- ↑↑↑ 阶段 S9 结束。下一个阶段（S10）完成后，在下面新建「## 阶段 S10：xxx」标题 ↓↓↓ -->
 
+---
+
+## 阶段 S10：前端视觉还原（仿闲鱼）
+
+### 【编写助手】工作总结
+
+**状态**：✅ 已完成　**日期**：2026-11-03
+
+1. 按 5 张闲鱼截图把整个前台重做了一遍：黄顶栏 + 白卡片 + 橙红价格 + 商品网格，设计变量、组件、页面三层拆开，个人中心从 Tab 改成了左侧菜单。
+2. 新增 3 个正式页面（列表 / 详情 / 发布）+ 404 页，并删掉了开发期的 `public/verify/` 整个目录 —— 它的每个功能都已经能在正式页面里点出来。
+3. e2e 测试**全量重写**成"打在正式界面上"的断言（含颜色、列数、圆角这些视觉规范），70 → 80 项全绿；接口层 227 项回归也全绿，后端一行没改。
+
+**文件清单**：
+
+| 文件 | 说明 |
+|------|------|
+| `frontend/src/styles/` | `variables` / `base` / `utilities` / `main`（设计变量 + reset + 工具类） |
+| `frontend/src/components/layout/` | `AppHeader`（黄顶栏两行）、`NoticeBar`、`FloatingBar`、`AppFooter` |
+| `frontend/src/components/product/` | `ProductCard`、`ProductGrid`、`ProductSkeleton`、`PriceTag`、`StatusTag` |
+| `frontend/src/components/common/` | `AppPagination`、`EmptyState`、`ContactDialog`、`AppToast` |
+| `frontend/src/components/publish/` | `ImageUploader`（九宫格串行上传）、`CategorySelect`（二级联动） |
+| `frontend/src/composables/` | `useUser`、`useToast`、`useFormat` |
+| `frontend/src/directives/imgFallback.js` | 图片加载失败兜底 |
+| `frontend/src/views/` | 新增 `ProductList` `ProductDetail` `Publish` `NotFound`；改造 `Home` `Profile` `Seller` `Login` `Register` |
+| `frontend/public/img/placeholder.svg` | 本地占位图 |
+| `docs/设计-S10前端布局与视觉.md` | 施工前的方案（v1.1，文末有实施记录） |
+| `scripts/e2e-test.mjs` | 重写（80 项，正式页面断言） |
+
+**需要讲清楚的点**：① 页面上的"权限"只是体验，真正的门在拦截器和路由守卫上；② 详情页三种身份（游客 / 买家 / 卖家本人）按钮不同，这是本项目"信息撮合"模型最直观的一处体现；③ 种子商品图是 `picsum.photos` 外链，断网会全裂，所以必须有占位图兜底。
+
+### 【代码老师】教学总结
+
+**日期**：____________
+
+**用户已理解**（3 句话以内）：
+
+（待填写）
+
+**发现的问题**：
+
+| # | 问题现象 / 位置 | 用户的困惑点 | 严重程度 |
+|:-:|----------------|-------------|:--------:|
+| 1 | | | |
+
+**建议下一阶段注意**：
+
+（待填写）
+
+<!-- ↑↑↑ 阶段 S10 结束。下一个阶段（S11）完成后，在下面新建「## 阶段 S11：xxx」标题 ↓↓↓ -->
+
 
 
 

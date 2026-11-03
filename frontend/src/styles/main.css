@@ -1,99 +1,134 @@
-/* S3 阶段只做最小样式，视觉还原统一在 S10 做（届时会换成闲鱼色板的 CSS 变量） */
+/**
+ * 全站样式入口。
+ *
+ * 拆成三层：
+ *   variables.css  —— 设计变量（颜色、圆角、间距…）
+ *   base.css       —— reset + 全局排版 + 无障碍
+ *   utilities.css  —— 工具类（容器、卡片、标签、按钮…）
+ *
+ * 组件自己的样式仍然写在各自的 `<style scoped>` 里，不往这里堆。
+ */
 
-* {
-  box-sizing: border-box;
-}
+@import './variables.css';
+@import './base.css';
+@import './utilities.css';
 
-body {
-  margin: 0;
-  font-family: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
-  color: #222;
-  background: #f7f8fa;
-}
-
-a {
-  text-decoration: none;
-}
-
-/* ---- 表单通用样式（S3 的登录/注册页共用） ---- */
+/* ==========================================================
+   登录 / 注册卡片（S3 建的，S10 换肤）
+   ⚠️ 类名 `.form-card` 必须保留：scripts/e2e-test.mjs 第 1~4 节靠它定位。
+   ========================================================== */
 .form-card {
-  max-width: 380px;
-  margin: 60px auto;
-  padding: 28px;
-  background: #fff;
-  border: 1px solid #e5e5e5;
-  border-radius: 8px;
+  width: 100%;
+  max-width: 400px;
+  margin: 56px auto 72px;
+  padding: var(--gap-8);
+  background: var(--color-card);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-card);
+}
+
+/* 卡片顶部的圆形黄色小 logo */
+.form-card::before {
+  content: '校';
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  margin: 0 auto 18px;
+  font-size: 22px;
+  font-weight: 700;
+  color: #1a1a1a;
+  background: var(--color-primary);
+  border-radius: 50%;
 }
 
 .form-card h2 {
-  margin: 0 0 20px;
+  margin: 0 0 var(--gap-6);
+  font-size: var(--fs-lg);
+  font-weight: 600;
   text-align: center;
-  font-size: 20px;
 }
 
 .form-card label {
   display: block;
-  margin-bottom: 4px;
-  font-size: 13px;
-  color: #666;
+  margin-bottom: 6px;
+  font-size: var(--fs-sm);
+  color: var(--color-text-sub);
 }
 
 .form-card input {
   display: block;
   width: 100%;
-  margin-bottom: 14px;
-  padding: 9px 12px;
-  font-size: 14px;
-  border: 1px solid #d9d9d9;
-  border-radius: 4px;
+  height: 42px;
+  margin-bottom: var(--gap-4);
+  padding: 0 12px;
+  font-size: var(--fs-base);
+  background: #fff;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
   outline: none;
+  transition: border-color var(--dur-fast), box-shadow var(--dur-fast);
 }
 
 .form-card input:focus {
-  border-color: #ff5000;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(255, 209, 0, 0.18);
 }
 
-.form-card button {
+.form-card button[type='submit'] {
   width: 100%;
-  padding: 10px;
-  font-size: 15px;
-  color: #fff;
-  background: #ff5000;
+  height: 44px;
+  margin-top: var(--gap-2);
+  font-size: var(--fs-md);
+  font-weight: 600;
+  color: #1a1a1a;
+  background: var(--color-primary);
   border: none;
-  border-radius: 4px;
-  cursor: pointer;
+  border-radius: var(--radius-pill);
+  transition: background var(--dur-fast), transform var(--dur-fast);
 }
 
-.form-card button:disabled {
-  background: #bbb;
+.form-card button[type='submit']:hover:not(:disabled) {
+  background: var(--color-primary-hover);
+}
+
+.form-card button[type='submit']:active:not(:disabled) {
+  transform: scale(0.99);
+}
+
+.form-card button[type='submit']:disabled {
+  background: #e5e5e5;
+  color: #999;
   cursor: not-allowed;
 }
 
 .form-card .msg-error {
-  margin-bottom: 12px;
+  margin-bottom: var(--gap-3);
   padding: 8px 10px;
-  font-size: 13px;
-  color: #c62828;
-  background: #fff0f0;
-  border-radius: 4px;
+  font-size: var(--fs-sm);
+  color: var(--color-tag-warn-text);
+  background: var(--color-tag-warn-bg);
+  border-radius: var(--radius-md);
 }
 
 .form-card .msg-ok {
-  margin-bottom: 12px;
+  margin-bottom: var(--gap-3);
   padding: 8px 10px;
-  font-size: 13px;
-  color: #2e7d32;
-  background: #f0fff4;
-  border-radius: 4px;
+  font-size: var(--fs-sm);
+  color: var(--color-tag-green-text);
+  background: var(--color-tag-green-bg);
+  border-radius: var(--radius-md);
 }
 
 .form-card .foot {
-  margin-top: 16px;
+  margin: var(--gap-2) 0 0;
   text-align: center;
-  font-size: 13px;
-  color: #666;
+  font-size: var(--fs-sm);
+  color: var(--color-text-muted);
 }
 
 .form-card .foot a {
-  color: #ff5000;
+  color: var(--color-link);
+  font-weight: 600;
 }

@@ -1,0 +1,92 @@
+/**
+ * 设计变量（Design Tokens）—— 全站唯一的"颜色 / 圆角 / 间距 / 字号"来源。
+ *
+ * 为什么要有这一层：如果每个组件里直接写 #FFD100、8px，
+ * 以后想调一下主色，就得全项目搜索替换，而且一定会漏几处。
+ * 有了变量，改这里一行，全站跟着变。
+ *
+ * 色值取自 `闲鱼页面截图/` 的实拍取样（见 docs/设计参考-闲鱼逆向分析.md §8）。
+ */
+
+:root {
+  /* ==================== 品牌色 ==================== */
+  --color-primary: #ffd100;          /* 顶栏、主按钮、选中态 */
+  --color-primary-hover: #ffdb33;
+  --color-primary-active: #e6bc00;
+  --color-primary-soft: #fffbeb;     /* 选中项的淡黄底 */
+  --color-price: #ff5000;            /* 价格数字 */
+  --color-link: #ff6600;             /* 可点文字 */
+
+  /* ==================== 中性色 ==================== */
+  --color-bg: #f7f8fa;               /* 页面底色 */
+  --color-card: #ffffff;
+  --color-border: #efefef;           /* 分隔线、卡片描边 */
+  --color-border-strong: #dddddd;    /* 输入框描边 */
+  --color-text: #333333;
+  --color-text-sub: #666666;
+  --color-text-muted: #999999;
+  --color-mask: rgba(0, 0, 0, 0.45);
+
+  /* ==================== 按钮 ==================== */
+  --color-dark-btn: #2b2b2b;         /* 深色按钮（标记售出 / 发布闲置） */
+  --color-dark-btn-hover: #3d3d3d;
+
+  /* ==================== 标签 ==================== */
+  --color-tag-credit-bg: #fff0e5;
+  --color-tag-credit-text: #ff6600;
+  --color-tag-warn-bg: #fff0f0;
+  --color-tag-warn-text: #ff4d4f;
+  --color-tag-new-bg: #fff0b3;
+  --color-tag-new-text: #8a6100;
+  --color-tag-grey-bg: #f5f5f5;
+  --color-tag-grey-text: #999999;
+  --color-tag-green-bg: #f6ffed;
+  --color-tag-green-text: #389e0d;
+
+  /* ==================== 圆角 ==================== */
+  --radius-sm: 2px;      /* 小标签 */
+  --radius-md: 4px;      /* 输入框、小按钮 */
+  --radius-lg: 8px;      /* 商品卡、内容卡 */
+  --radius-xl: 12px;     /* 大卡片、弹窗、资料卡 */
+  --radius-pill: 999px;  /* 搜索框、胶囊按钮 */
+
+  /* ==================== 阴影（三级够了） ==================== */
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-hover: 0 6px 20px rgba(0, 0, 0, 0.1);
+  --shadow-dialog: 0 12px 40px rgba(0, 0, 0, 0.18);
+
+  /* ==================== 间距（4 的倍数） ==================== */
+  --gap-1: 4px;
+  --gap-2: 8px;
+  --gap-3: 12px;
+  --gap-4: 16px;
+  --gap-5: 20px;
+  --gap-6: 24px;
+  --gap-8: 32px;
+
+  /* ==================== 字号 ==================== */
+  --fs-xs: 12px;
+  --fs-sm: 13px;
+  --fs-base: 14px;
+  --fs-md: 16px;
+  --fs-lg: 20px;
+  --fs-xl: 24px;
+  --fs-logo: 28px;
+
+  /* ==================== 布局尺寸 ==================== */
+  --container: 1200px;   /* 内容最大宽度 */
+  --header-h: 84px;      /* 顶栏：主行 58 + 热搜行 26 */
+  --sidebar-w: 240px;    /* 首页左侧分类栏 */
+
+  /* ==================== 层级 ==================== */
+  --z-header: 100;
+  --z-floating: 90;
+  --z-dialog: 1000;
+  --z-toast: 1100;
+
+  /* ==================== 动效 ==================== */
+  --ease: cubic-bezier(0.2, 0.7, 0.3, 1);
+  --dur-fast: 150ms;
+  --dur-base: 220ms;
+  --dur-slow: 350ms;
+}

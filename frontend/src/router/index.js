@@ -3,16 +3,45 @@ import { createRouter, createWebHistory } from 'vue-router'
 /**
  * 路由表。
  *
- * S3 阶段只有三条路由，但**守卫逻辑现在就写好** ——
- * 后面 S5（发布商品）、S8（个人中心）、S9（管理后台）加页面时，
- * 只要在路由上写 `meta: { requiresAuth: true }` 就自动生效，不用再改这里。
+ * 守卫逻辑在 S3 就写好了，后面加页面只要在路由上写
+ * `meta: { requiresAuth: true }` / `requiresAdmin: true` 就自动生效。
+ *
+ * 页面清单见 `需求设计文档.md` §7：
+ *   P01 / 首页        P02 /products    P03 /product/:id   P04 /publish
+ *   P05 /seller/:id   P06 /login       P07 /register      P08 /profile
+ *   A01~A05 /admin/**
  */
 const routes = [
   {
     path: '/',
     name: 'home',
-    component: () => import('@/views/Home.vue')
+    component: () => import('@/views/Home.vue'),
+    meta: { title: '' }
   },
+
+  // ---------------- S10：商品列表 / 详情 / 发布 ----------------
+  {
+    path: '/products',
+    name: 'product-list',
+    component: () => import('@/views/ProductList.vue'),
+    // 匿名可访问：游客也能逛
+    meta: { title: '全部商品' }
+  },
+  {
+    path: '/product/:id',
+    name: 'product-detail',
+    component: () => import('@/views/ProductDetail.vue'),
+    meta: { title: '商品详情' }
+  },
+  {
+    path: '/publish',
+    name: 'publish',
+    component: () => import('@/views/Publish.vue'),
+    // 发布必须登录（后端也会挡，这里只是让他先去登录）
+    meta: { requiresAuth: true, title: '发布闲置' }
+  },
+
+  // ---------------- 登录 / 注册 ----------------
   {
     path: '/login',
     name: 'login',
@@ -26,27 +55,25 @@ const routes = [
     meta: { title: '注册' }
   },
 
-  // ---------------- S8：个人中心 + 卖家主页 ----------------
+  // ---------------- 个人中心 + 卖家主页 ----------------
   {
     path: '/profile',
     name: 'profile',
     component: () => import('@/views/Profile.vue'),
-    // 个人中心全是"我的"数据，必须登录
     meta: { requiresAuth: true, title: '个人中心' }
   },
   {
     path: '/seller/:id',
     name: 'seller',
     component: () => import('@/views/Seller.vue'),
-    // 卖家主页是公开的（游客也能看卖家在卖什么），但页面里不会显示联系方式
+    // 卖家主页公开，但不显示联系方式
     meta: { title: '卖家主页' }
   },
 
-  // ---------------- S9：管理后台（嵌套路由） ----------------
+  // ---------------- 管理后台（嵌套路由） ----------------
   //
-  // 用"父路由 + children"而不是 5 个平级路由，好处是导航栏只写一份。
-  // ⚠️ requiresAdmin 写在**父路由**上就够了：vue-router 的 to.meta 是
-  //    父路由和子路由 meta 合并后的结果，所以 5 个子页面自动都受保护。
+  // requiresAdmin 写在**父路由**上就够了：vue-router 的 to.meta 是
+  // 父子合并的结果，5 个子页面自动都受保护。
   {
     path: '/admin',
     component: () => import('@/views/admin/AdminLayout.vue'),
@@ -83,15 +110,25 @@ const routes = [
         meta: { title: '用户管理' }
       }
     ]
-  }
+  },
 
-  // 后面阶段会陆续加上：
-  // /products（S10）、/product/:id（S10）、/publish（S10）
+  // ---------------- 兜底 404 ----------------
+  // 必须放最后：`/:pathMatch(.*)*` 会吃掉所有没匹配上的地址
+  {
+    path: '/:pathMatch(.*)*',
+    name: 'not-found',
+    component: () => import('@/views/NotFound.vue'),
+    meta: { title: '页面不存在' }
+  }
 ]
 
 const router = createRouter({
   history: createWebHistory(),
-  routes
+  routes,
+  // 切页面时回到顶部（否则从长列表点进详情，会停在中段）
+  scrollBehavior(to, from, savedPosition) {
+    return savedPosition || { top: 0 }
+  }
 })
 
 /**
@@ -100,7 +137,7 @@ const router = createRouter({
  * 判断顺序很重要：
  *   1. 没登录 + 要登录才能看 → 跳登录页（并把原地址记下来，登录后跳回去）
  *   2. 登录了但要管理员 + 不是管理员 → 回首页
- *   3. 其余放行
+ *   3. 已登录还去登录页 → 回首页
  */
 router.beforeEach((to, from, next) => {
   const token = localStorage.getItem('token')
@@ -114,7 +151,6 @@ router.beforeEach((to, from, next) => {
     return next({ path: '/' })
   }
 
-  // 已登录还去登录页 → 直接回首页
   if (to.name === 'login' && token) {
     return next({ path: '/' })
   }
