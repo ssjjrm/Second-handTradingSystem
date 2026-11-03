@@ -34,3 +34,15 @@ export const setUserStatus = (id, status) =>
 
 // ---------------- §10.9 数据统计 ----------------
 export const getStats = () => request.get('/admin/stats')
+
+// ---------------- 业务开关（开发调试用，不属于那 35 个业务接口） ----------------
+
+/** 查「发布是否需要审核」开关：{ enabled, configValue, configKey } */
+export const getReviewSwitch = () => request.get('/admin/settings/review')
+
+/**
+ * 切换审核开关（不用重启后端）。
+ * true = 发布后待审核（正式）；false = 发布即上架（测试）
+ */
+export const setReviewSwitch = (enabled) =>
+  request.put('/admin/settings/review', null, { params: { enabled } })

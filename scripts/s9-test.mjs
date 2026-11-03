@@ -376,7 +376,96 @@ async function main() {
     `${stats.todayContacts} ≤ ${stats.totalContactRecords}`)
 
   // ==================================================================
-  console.log('\n[8] 清理测试数据')
+  console.log('\n[8] 审核开关（§10.10，开发调试用）')
+  // ==================================================================
+
+  // ① 默认值
+  const swDef = await api('GET', '/api/admin/settings/review', { token: tokAdmin })
+  check('默认是「需要审核」（正式模式）', swDef.json?.data?.enabled === true,
+    JSON.stringify(swDef.json?.data))
+  check('同时返回配置文件里的值（方便提示"重启后会回到哪个值"）',
+    swDef.json?.data?.configValue === true && swDef.json?.data?.configKey === 'app.review.enabled')
+
+  // ② 权限：普通用户不能改
+  const swForbidden = await api('PUT', '/api/admin/settings/review?enabled=false', { token: tokB1 })
+  check('普通用户改开关 → 403（挂在 /api/admin 下面自动受保护）',
+    swForbidden.status === 403, `HTTP ${swForbidden.status}`)
+  check('普通用户那一次没改成功，开关还是开着',
+    (await api('GET', '/api/admin/settings/review', { token: tokAdmin })).json?.data?.enabled === true)
+
+  // ③ 关闭 → 发布即上架
+  const swOff = await api('PUT', '/api/admin/settings/review?enabled=false', { token: tokAdmin })
+  check('关闭审核 → 200 且 enabled=false',
+    swOff.status === 200 && swOff.json?.data?.enabled === false, `HTTP ${swOff.status}`)
+
+  const healthAfterOff = await api('GET', '/api/health')
+  check('/api/health 里也能看到 reviewEnabled=false（一个 curl 就能确认当前模式）',
+    healthAfterOff.json?.data?.reviewEnabled === false,
+    String(healthAfterOff.json?.data?.reviewEnabled))
+
+  const pubNoReview = await api('POST', '/api/products', {
+    token: tokS1,
+    body: {
+      title: '【开关测试】审核关闭时应直接上架', categoryId: catId,
+      conditionLevel: '全新', price: 1, tradePlace: '测试用'
+    }
+  })
+  const pidNoReview = pubNoReview.json?.data?.id
+  check('审核关闭时发布成功', !!pidNoReview, `id=${pidNoReview}`)
+  check('★ 新商品 status=1（直接上架，不是 0 待审核）',
+    n(`SELECT status FROM product WHERE id=${pidNoReview}`) === 1,
+    `status=${n(`SELECT status FROM product WHERE id=${pidNoReview}`)}`)
+
+  const visAfterOff = (await api('GET',
+    '/api/products?keyword=' + encodeURIComponent('开关测试') + '&size=50'))
+    .json?.data?.records?.some((p) => p.id === pidNoReview)
+  check('发布后立刻能被前台搜到（不用审核）', visAfterOff === true)
+
+  // ④ 打开 → 回到待审核
+  const swOn = await api('PUT', '/api/admin/settings/review?enabled=true', { token: tokAdmin })
+  check('重新开启审核 → 200 且 enabled=true',
+    swOn.status === 200 && swOn.json?.data?.enabled === true)
+
+  const pubWithReview = await api('POST', '/api/products', {
+    token: tokS1,
+    body: {
+      title: '【开关测试】审核开启时应进入待审核', categoryId: catId,
+      conditionLevel: '全新', price: 1, tradePlace: '测试用'
+    }
+  })
+  const pidWithReview = pubWithReview.json?.data?.id
+  check('★ 开关恢复后，新商品 status=0（回到待审核）',
+    n(`SELECT status FROM product WHERE id=${pidWithReview}`) === 0,
+    `status=${n(`SELECT status FROM product WHERE id=${pidWithReview}`)}`)
+
+  const visAfterOn = (await api('GET',
+    '/api/products?keyword=' + encodeURIComponent('开关测试') + '&size=50'))
+    .json?.data?.records?.some((p) => p.id === pidWithReview)
+  check('待审核商品前台搜不到（正式流程没被破坏）', visAfterOn === false)
+
+  // ⑤ 开关只影响初始状态，不绕过其他业务规则
+  await api('PUT', '/api/admin/settings/review?enabled=false', { token: tokAdmin })
+  const badCat = await api('POST', '/api/products', {
+    token: tokS1,
+    body: {
+      title: '【开关测试】一级分类应该还是被拦', categoryId: tree.json.data[0].id,
+      conditionLevel: '全新', price: 1, tradePlace: '测试用'
+    }
+  })
+  check('审核关闭时，"必须选二级分类"的规则依然生效 → 400',
+    badCat.status === 400, `HTTP ${badCat.status} ${badCat.json?.message}`)
+  await api('PUT', '/api/admin/settings/review?enabled=true', { token: tokAdmin })
+
+  // ⑥ 清场
+  await api('DELETE', `/api/products/${pidNoReview}`, { token: tokS1 })
+  await api('DELETE', `/api/products/${pidWithReview}`, { token: tokS1 })
+  check('两件开关测试商品都已删除',
+    n(`SELECT COUNT(*) FROM product WHERE id IN (${pidNoReview},${pidWithReview})`) === 0)
+  check('开关已恢复为「需要审核」',
+    (await api('GET', '/api/admin/settings/review', { token: tokAdmin })).json?.data?.enabled === true)
+
+  // ==================================================================
+  console.log('\n[9] 清理测试数据')
   // ==================================================================
 
   // 测试商品现在是 status=3（已下架），卖家自己删得掉（已售出才不让删）

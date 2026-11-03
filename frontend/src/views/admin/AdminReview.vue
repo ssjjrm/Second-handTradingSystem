@@ -1,6 +1,12 @@
 <script setup>
 import { onMounted, ref } from 'vue'
-import { approveProduct, getPendingProducts, rejectProduct } from '@/api/admin'
+import {
+  approveProduct,
+  getPendingProducts,
+  getReviewSwitch,
+  rejectProduct,
+  setReviewSwitch
+} from '@/api/admin'
 
 /**
  * 商品审核（§10.1~10.3）。
@@ -20,6 +26,38 @@ const error = ref('')
 const loading = ref(false)
 const busyId = ref(null)
 
+// ---------------- 审核开关（开发调试用） ----------------
+const reviewEnabled = ref(true)
+const configValue = ref(true)
+const switchMsg = ref('')
+
+async function loadSwitch() {
+  try {
+    const s = await getReviewSwitch()
+    reviewEnabled.value = s.enabled
+    configValue.value = s.configValue
+  } catch (e) {
+    /* 开关读不到不影响审核本身，静默即可 */
+  }
+}
+
+async function toggleSwitch() {
+  const next = !reviewEnabled.value
+  const word = next ? '开启审核' : '关闭审核'
+  const tip = next
+    ? '开启后：新发布的商品需要在这里审核通过才会上架。'
+    : '关闭后：新发布的商品会【直接上架】，不再经过审核 —— 只建议在本地测试时这样做。'
+  if (!confirm(`${word}吗？\n\n${tip}`)) return
+  try {
+    const s = await setReviewSwitch(next)
+    reviewEnabled.value = s.enabled
+    configValue.value = s.configValue
+    switchMsg.value = next ? '审核已开启（正式模式）' : '审核已关闭（测试模式，重启后端会恢复配置值）'
+  } catch (e) {
+    alert(e.message)
+  }
+}
+
 async function load() {
   loading.value = true
   error.value = ''
@@ -34,7 +72,10 @@ async function load() {
   }
 }
 
-onMounted(load)
+onMounted(() => {
+  loadSwitch()
+  load()
+})
 
 async function onApprove(item) {
   if (!confirm(`审核通过「${item.title}」吗？\n\n通过后它会立刻出现在前台列表里。`)) return
@@ -76,9 +117,28 @@ function changePage(delta) {
   <div>
     <h2>商品审核 <span class="count">待审 {{ total }} 件</span></h2>
 
+    <!-- 审核开关（开发调试用）：关掉后发布即可见，不用每次都来这里点一遍 -->
+    <div class="switch-bar" :class="{ off: !reviewEnabled }">
+      <span class="switch-label">
+        审核开关：
+        <b>{{ reviewEnabled ? '已开启（正式模式）' : '已关闭（测试模式，发布即上架）' }}</b>
+      </span>
+      <button class="switch-btn" @click="toggleSwitch">
+        {{ reviewEnabled ? '关闭审核' : '开启审核' }}
+      </button>
+      <span class="hint">
+        运行时切换只在内存生效，重启后端会回到配置文件里的值（{{ configValue ? 'true 需要审核' : 'false 跳过审核' }}）。
+      </span>
+      <span v-if="switchMsg" class="ok">{{ switchMsg }}</span>
+    </div>
+
     <p v-if="error" class="msg-error">{{ error }}</p>
     <p v-if="loading" class="hint">加载中…</p>
     <p v-else-if="!list.length" class="hint">没有待审核商品 🎉</p>
+
+    <p v-if="!reviewEnabled" class="hint tip">
+      ⚠️ 审核已关闭：这段时间新发布的商品会直接上架，所以这个列表不会再变长。
+    </p>
 
     <div v-for="item in list" :key="item.id" class="card">
       <div class="main">
@@ -128,4 +188,15 @@ button.danger { border: 1px solid #c62828; color: #c62828; background: #fff1f0; 
 .pager { display: flex; gap: 10px; align-items: center; font-size: 13px; margin-top: 12px; }
 .msg-error { color: #c62828; font-size: 13px; }
 .hint { color: #888; font-size: 13px; }
+.ok { color: #2e7d32; font-size: 13px; }
+.tip { padding: 8px 12px; background: #fffbe6; border: 1px solid #ffe58f; border-radius: 6px; }
+
+/* 审核开关那条横条 */
+.switch-bar {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 10px 14px; margin-bottom: 14px; font-size: 13px;
+  background: #f6ffed; border: 1px solid #b7eb8f; border-radius: 6px;
+}
+.switch-bar.off { background: #fff1f0; border-color: #ffa39e; }
+.switch-btn { padding: 4px 12px; cursor: pointer; }
 </style>

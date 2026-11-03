@@ -110,6 +110,19 @@
     <button onclick="checkForbidden()">怎么验证普通人进不来？</button>
   </fieldset>
 
+  <fieldset>
+    <legend>9. 审核开关（§10.10，开发调试用）</legend>
+    <button onclick="loadSwitch()">GET /api/admin/settings/review</button>
+    <button onclick="setSwitch(false)">关闭审核（发布即上架）</button>
+    <button onclick="setSwitch(true)">开启审核（正式）</button>
+    <button onclick="testPublish()">⭐ 发一件商品，看它是什么状态</button>
+    <span class="hint">
+      关闭审核后，新发布的商品 status 直接是 <b>1 在售</b>，不用再来后台点「通过」。
+      <br>运行时切换只存在内存里，<b>重启后端会回到 <code>app.review.enabled</code> 的值</b>。
+    </span>
+    <div id="switchBox"></div>
+  </fieldset>
+
   <h3>响应</h3>
   <pre id="out">（点上面的按钮）</pre>
 
@@ -385,6 +398,81 @@ function checkForbidden() {
     + '   403 = 我知道你是谁，但你没权限 → 前端提示"无权限"，不跳登录\n\n'
     + '另外注意：把「管理后台」入口从前端藏起来不算权限控制 ——\n'
     + '任何人手工敲 URL 都能绕过，真正的门在 AdminInterceptor 上。';
+}
+
+// ---------------- 9. 审核开关 ----------------
+async function loadSwitch() {
+  const r = await call('GET', '/api/admin/settings/review');
+  const box = document.getElementById('switchBox');
+  if (r?.json?.code !== 200) { box.innerHTML = '<p class="bad">读不到开关（要先 admin 登录）</p>'; return; }
+  const d = r.json.data;
+  box.innerHTML = `<p>当前：<b class="${d.enabled ? 'ok' : 'bad'}">${d.enabled ? '已开启（发布后待审核）' : '已关闭（发布即上架）'}</b>
+    ｜ 配置文件值：<code>${d.configKey} = ${d.configValue}</code></p>`;
+}
+
+async function setSwitch(enabled) {
+  const r = await call('PUT', `/api/admin/settings/review?enabled=${enabled}`);
+  await loadSwitch();
+  if (r?.status === 200) {
+    out.textContent += `\n\n✅ ${r.json.message}`;
+  }
+}
+
+/**
+ * 发一件测试商品，然后读回它的 status。
+ * 预期：审核开启 → 0 待审核；审核关闭 → 1 在售。
+ *
+ * ⚠️ 这里临时用 student01 的 token（admin 没填微信/QQ，发布会被规则拦住），
+ *    但**不写进 localStorage**，免得把这个页面自己的身份换掉。
+ */
+async function testPublish() {
+  const box = document.getElementById('switchBox');
+  out.textContent = '① 临时登录 student01（不覆盖本页 localStorage 里的 admin 身份）\n';
+  const lr = await fetch('/api/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: 'student01', password: '123456' })
+  });
+  const lj = await lr.json();
+  const t = lj.data.token;
+  const seller = lj.data.user;
+
+  const tree = await (await fetch('/api/categories')).json();
+  const catId = tree.data[0].children[0].id;
+
+  out.textContent += '② 发布一件商品\n';
+  const pr = await fetch('/api/products', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + t },
+    body: JSON.stringify({
+      title: '【开关测试】' + new Date().toLocaleTimeString() + ' 可删',
+      categoryId: catId, conditionLevel: '全新', price: 1, tradePlace: '测试用'
+    })
+  });
+  const pj = await pr.json();
+  if (pj.code !== 200) {
+    out.textContent += `❌ 发布失败：${pj.message}\n`;
+    box.innerHTML = `<p class="bad">发布失败：${pj.message}（student01 是不是被禁用了？）</p>`;
+    return;
+  }
+  const pid = pj.data.id;
+
+  out.textContent += `③ 读回商品 ${pid} 的状态\n`;
+  const d = await (await fetch('/api/products/' + pid, { headers: { Authorization: 'Bearer ' + t } })).json();
+  const st = d.data.status;
+  const txt = d.data.statusText;
+
+  out.textContent += `\n状态 = ${st}（${txt}）\n`
+    + (st === 1 ? '✅ 审核是关闭的：发布即上架' : st === 0 ? '✅ 审核是开启的：进入待审核' : '⚠️ 异常状态');
+
+  box.innerHTML = `<p>刚发布的商品 <code>id=${pid}</code>：
+    status=<b>${st}</b>（${txt}）
+    → ${st === 1 ? '<span class="ok">审核关闭：直接上架</span>' : '<span class="ok">审核开启：等待审核</span>'}</p>
+    <p class="hint">（这件商品脚本会自动删掉，不污染数据）</p>`;
+
+  // 清场：删掉这件测试商品
+  await fetch('/api/products/' + pid, { method: 'DELETE', headers: { Authorization: 'Bearer ' + t } });
+  out.textContent += '④ 已删除这件测试商品\n';
 }
 
 refreshStat();

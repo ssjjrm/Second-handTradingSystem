@@ -47,6 +47,20 @@ upload:
   path: uploads           # 本地目录（相对 backend 运行目录）
   base-url: /uploads      # 对外访问前缀
 
+# ==================== 本项目自己的业务开关 ====================
+app:
+  review:
+    # 商品发布是否需要审核：
+    #   true （默认）发布后 status=0 待审核，管理员通过后才出现在前台 —— 正式行为
+    #   false        发布后 status=1 直接上架，跳过审核 —— 仅本地测试 / 演示用
+    #
+    # 三种改法，任选其一：
+    #   ① 改这里（要重启后端）
+    #   ② 设环境变量 REVIEW_ENABLED=false（不用改文件，适合临时演示）
+    #   ③ 后台在线切换 PUT /api/admin/settings/review?enabled=false（不用重启）
+    #      —— 注意：在线切换只存在内存里，重启后回到这里的值
+    enabled: ${REVIEW_ENABLED:true}
+
 logging:
   level:
     root: info

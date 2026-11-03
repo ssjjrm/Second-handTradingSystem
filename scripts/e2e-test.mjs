@@ -604,11 +604,20 @@ async function main() {
     check('统计页明确说明「没有成交额」', statsText.includes('没有「成交额」'))
     check('统计页有「已售出（成交量代理）」指标', statsText.includes('成交量代理'))
 
-    // ---------- 13.3 商品审核 ----------
+    // ---------- 13.3 商品审核（含审核开关横条）----------
     await cdp.send('Page.navigate', { url: FRONT + '/admin/review' })
-    await sleep(1800)
+    await sleep(2000)
     const reviewTitle = await cdp.eval('document.querySelector("h2")?.textContent || ""')
     check('商品审核页能加载', reviewTitle.includes('商品审核'), `"${reviewTitle.trim()}"`)
+
+    const switchBar = await cdp.eval('document.querySelector(".switch-bar")?.innerText || ""')
+    check('审核页顶部有「审核开关」横条，且默认是已开启（正式模式）',
+      switchBar.includes('已开启'), switchBar.replace(/\s+/g, ' ').slice(0, 80))
+
+    const switchBtn = await cdp.eval(
+      '[...document.querySelectorAll(".switch-bar button")].map(b => b.textContent.trim()).join("|")')
+    check('开关旁有「关闭审核」按钮（可在线切换，不用重启）',
+      switchBtn.includes('关闭审核'), switchBtn)
 
     // ---------- 13.4 商品管理（表格 + 状态筛选 + 强制下架按钮）----------
     await cdp.send('Page.navigate', { url: FRONT + '/admin/products' })

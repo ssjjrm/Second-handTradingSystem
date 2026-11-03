@@ -11,6 +11,7 @@ import com.secondhand.common.BehaviorType;
 import com.secondhand.common.BusinessException;
 import com.secondhand.common.ProductStatus;
 import com.secondhand.common.Result;
+import com.secondhand.config.ReviewSwitch;
 import com.secondhand.dto.ProductCreateDTO;
 import com.secondhand.dto.ProductQueryDTO;
 import com.secondhand.dto.ProductUpdateDTO;
@@ -79,6 +80,14 @@ public class ProductServiceImpl implements ProductService {
 
     /** 行为埋点统一入口（内部已保证：未登录跳过、浏览自己商品跳过、失败不抛异常） */
     private final BehaviorService behaviorService;
+
+    /**
+     * 「发布是否需要审核」的开关。
+     *
+     * <p>默认是「需要」（正式行为）。关掉之后发布即可见，
+     * 只是为了本地测试省掉"切管理员账号审核"这一步 —— 见 {@link ReviewSwitch} 的说明。
+     */
+    private final ReviewSwitch reviewSwitch;
 
     // ==================================================================
     //  列表
@@ -299,13 +308,27 @@ public class ProductServiceImpl implements ProductService {
         product.setBrand(dto.getBrand());
         product.setTradePlace(dto.getTradePlace());
         product.setSellerId(userId);
-        // 新发布的商品一律「待审核」，绝不会直接出现在前台列表里
-        product.setStatus(ProductStatus.PENDING.getCode());
+
+        // ★ 初始状态由「审核开关」决定（见 ReviewSwitch，默认开启 = 正式行为）
+        //   true  → 待审核：绝不会直接出现在前台列表里
+        //   false → 直接上架：仅本地测试 / 演示用，省掉"切管理员账号审核一次"这一步
+        //
+        // ⚠️ 注意开关只影响**这一个状态值**，其他校验（联系方式、二级分类、
+        //    原价不低于现价）全部照旧 —— 测试模式不该绕过业务规则。
+        boolean needReview = reviewSwitch.isEnabled();
+        product.setStatus(needReview
+                ? ProductStatus.PENDING.getCode()
+                : ProductStatus.ON_SALE.getCode());
         product.setViewCount(0);
         product.setFavoriteCount(0);
 
         productMapper.insert(product);
-        log.info("用户 {} 发布商品 id={}，等待管理员审核", seller.getUsername(), product.getId());
+        if (needReview) {
+            log.info("用户 {} 发布商品 id={}，等待管理员审核", seller.getUsername(), product.getId());
+        } else {
+            log.warn("用户 {} 发布商品 id={}，审核开关已关闭 → 直接上架（测试模式）",
+                    seller.getUsername(), product.getId());
+        }
         return product.getId();
     }
 

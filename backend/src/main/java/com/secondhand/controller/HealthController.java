@@ -3,6 +3,7 @@ package com.secondhand.controller;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.secondhand.common.Result;
+import com.secondhand.config.ReviewSwitch;
 import com.secondhand.entity.User;
 import com.secondhand.mapper.UserMapper;
 import lombok.RequiredArgsConstructor;
@@ -32,6 +33,9 @@ public class HealthController {
 
     private final UserMapper userMapper;
 
+    /** 「发布是否需要审核」开关 —— 挂在这里只是为了 {@code curl /api/health} 一眼能看到当前模式 */
+    private final ReviewSwitch reviewSwitch;
+
     /** 活着吗 —— 不碰数据库 */
     @GetMapping
     public Result<Map<String, Object>> health() {
@@ -40,6 +44,8 @@ public class HealthController {
         data.put("service", "secondhand-backend");
         data.put("port", 8081);
         data.put("time", LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")));
+        // true = 发布后要审核（正式）；false = 发布即上架（测试模式）
+        data.put("reviewEnabled", reviewSwitch.isEnabled());
         return Result.success("服务正常", data);
     }
 
