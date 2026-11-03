@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>S7 收藏 + 行为埋点 - 接口验证</title>
+  <style>
+    body { font-family: Consolas, monospace; margin: 20px; max-width: 1280px; }
+    fieldset { margin-bottom: 14px; padding: 12px; border: 1px solid #ccc; }
+    legend { font-weight: bold; }
+    input, select { margin: 4px; padding: 4px; }
+    button { margin: 4px; padding: 6px 14px; cursor: pointer; }
+    pre { background: #f5f5f5; padding: 10px; max-height: 380px; overflow: auto; }
+    .ok { color: #2e7d32; font-weight: bold; }
+    .bad { color: #c62828; font-weight: bold; }
+    .hint { color: #666; font-size: 13px; }
+    code { background: #eee; padding: 1px 4px; }
+    table { border-collapse: collapse; font-size: 13px; }
+    th, td { border: 1px solid #ddd; padding: 3px 8px; }
+    .sold { color: #999; }
+    .tag { padding: 1px 6px; border-radius: 3px; font-size: 12px; }
+    .tag-on { background: #fff0e5; color: #ff6600; }
+    .tag-sold { background: #eee; color: #999; }
+  </style>
+</head>
+<body>
+  <h1>S7 收藏 + 行为埋点 · 接口验证</h1>
+  <p class="hint">
+    打开方式：<b>http://localhost:5174/verify/s7-favorite.html</b><br>
+    重点看一件事：<b>「想要」数（favorite_count）和 favorite 表必须永远一致</b> —— 它是冗余字段，最容易出错。
+  </p>
+  <p>当前登录：<code id="stat">检查中…</code>　<a href="/login">换账号</a></p>
+
+  <fieldset>
+    <legend>1. 收藏 / 取消收藏</legend>
+    商品 id <input id="pid" size="6" value="14">
+    <button onclick="addFav()">收藏（想要）</button>
+    <button onclick="removeFav()">取消收藏</button>
+    <button onclick="checkFav()">查是否已收藏</button>
+    <button onclick="addFavTwice()">连点两次收藏（验证幂等）</button>
+    <span class="hint">重复收藏应返回成功，但数字不重复增加</span>
+  </fieldset>
+
+  <fieldset>
+    <legend>2. 我的收藏</legend>
+    <button onclick="loadMine()">请求</button>
+    <span class="hint">已售出 / 已下架的商品也会在里面（灰色标记），这是刻意的（BR-F07）</span>
+    <div id="favTable"></div>
+  </fieldset>
+
+  <fieldset>
+    <legend>3. 计数一致性自检</legend>
+    <button onclick="consistencyHint()">怎么检查一致性？</button>
+    <div id="inconsistency"></div>
+  </fieldset>
+
+  <fieldset>
+    <legend>4. 行为埋点</legend>
+    <button onclick="recordView()">记录一次浏览 POST /api/behaviors/view/{id}</button>
+    <button onclick="behaviorHint()">怎么查看行为日志？</button>
+    <span class="hint">四类：1 浏览 / 2 收藏 / 3 咨询 / 4 取消收藏</span>
+  </fieldset>
+
+  <h3>响应</h3>
+  <pre id="out">（点上面的按钮）</pre>
+
+<script>
+const BASE = '';
+const out = document.getElementById('out');
+let lastCount = null;
+
+function token() { return localStorage.getItem('token') || ''; }
+function headers() {
+  return {
+    'Content-Type': 'application/json',
+    ...(token() ? { Authorization: 'Bearer ' + token() } : {})
+  };
+}
+
+function refreshStat() {
+  const el = document.getElementById('stat');
+  const u = JSON.parse(localStorage.getItem('user') || 'null');
+  if (token()) {
+    el.textContent = `${u?.username}（${u?.role}）`;
+    el.className = 'ok';
+  } else {
+    el.textContent = '未登录 —— 收藏相关接口全部要求登录';
+    el.className = 'bad';
+  }
+}
+
+async function call(method, url, body) {
+  out.textContent = `→ ${method} ${url}\n\n`;
+  try {
+    const res = await fetch(BASE + url, {
+      method, headers: headers(),
+      body: body ? JSON.stringify(body) : undefined
+    });
+    const text = await res.text();
+    let pretty = text;
+    try { pretty = JSON.stringify(JSON.parse(text), null, 2); } catch (e) {}
+    out.textContent += `← HTTP ${res.status}\n\n` + pretty;
+    let json = null;
+    try { json = JSON.parse(text); } catch (e) {}
+    return { status: res.status, json };
+  } catch (e) {
+    out.textContent += '❌ 请求失败：' + e.message;
+    return null;
+  }
+}
+
+function currentId() { return document.getElementById('pid').value; }
+
+async function addFav() {
+  const r = await call('POST', `/api/favorites/${currentId()}`);
+  if (r?.status === 200) {
+    const c = r.json.data.favoriteCount;
+    out.textContent += `\n\n想要数 = ${c}`
+      + (lastCount !== null ? `（上一次是 ${lastCount}，${c === lastCount + 1 ? '✅ 正确 +1' : c === lastCount ? '（没变，可能本来就收藏过）' : '✗ 数字异常')}）` : '');
+    lastCount = c;
+  }
+}
+
+async function removeFav() {
+  const r = await call('DELETE', `/api/favorites/${currentId()}`);
+  if (r?.status === 200) {
+    const c = r.json.data.favoriteCount;
+    out.textContent += `\n\n想要数 = ${c}`
+      + (lastCount !== null ? `（上一次是 ${lastCount}，${c === lastCount - 1 ? '✅ 正确 -1' : c === lastCount ? '（没变，可能本来就没收藏）' : '✗ 数字异常')}）` : '');
+    lastCount = c;
+  }
+}
+
+async function checkFav() {
+  const r = await call('GET', `/api/favorites/check/${currentId()}`);
+  if (r?.status === 200) {
+    const d = r.json.data;
+    out.textContent += `\n\nfavorited=${d.favorited}  favoriteCount=${d.favoriteCount}`;
+    lastCount = d.favoriteCount;
+  }
+}
+
+async function addFavTwice() {
+  const id = currentId();
+  out.textContent = `连点两次 POST /api/favorites/${id}\n\n`;
+  const r1 = await (await fetch(BASE + `/api/favorites/${id}`, { method: 'POST', headers: headers() })).json();
+  const r2 = await (await fetch(BASE + `/api/favorites/${id}`, { method: 'POST', headers: headers() })).json();
+  out.textContent += `第 1 次：code=${r1.code}  favoriteCount=${r1.data?.favoriteCount}\n`;
+  out.textContent += `第 2 次：code=${r2.code}  favoriteCount=${r2.data?.favoriteCount}\n\n`;
+  const same = r1.data?.favoriteCount === r2.data?.favoriteCount;
+  out.textContent += same
+    ? '✅ 幂等生效：第二次没有让计数再增加'
+    : '✗ 计数被重复增加了，说明幂等没做好';
+  lastCount = r2.data?.favoriteCount;
+}
+
+async function loadMine() {
+  const r = await call('GET', '/api/favorites?size=100');
+  if (r?.json?.code !== 200) return;
+  const d = r.json.data;
+  const box = document.getElementById('favTable');
+  box.innerHTML = '';
+
+  if (!d.records.length) { box.innerHTML = '<p class="hint">收藏夹是空的</p>'; return; }
+
+  const table = document.createElement('table');
+  table.innerHTML = '<tr><th>favoriteId</th><th>商品</th><th>价格</th><th>状态</th><th>收藏时间</th></tr>';
+  d.records.forEach((x) => {
+    const p = x.product || {};
+    const isSold = p.status !== 1;
+    const tr = document.createElement('tr');
+    if (isSold) tr.className = 'sold';
+    tr.innerHTML = `
+      <td>${x.favoriteId}</td>
+      <td class="${isSold ? 'sold' : ''}">${(p.title || '(商品已删除)').slice(0, 26)}</td>
+      <td>¥${p.price ?? '-'}</td>
+      <td><span class="tag ${isSold ? 'tag-sold' : 'tag-on'}">${p.statusText || '-'}</span></td>
+      <td>${(x.favoriteTime || '').slice(0, 19)}</td>`;
+    table.appendChild(tr);
+  });
+  box.appendChild(table);
+
+  const soldCount = d.records.filter((x) => x.product?.status !== 1).length;
+  out.textContent += `\n\n共 ${d.total} 条，其中 ${soldCount} 条已不在售（灰色显示）`;
+}
+
+function consistencyHint() {
+  const sql = `SELECT p.id, p.favorite_count, COUNT(f.id) AS real_count
+FROM product p LEFT JOIN favorite f ON f.product_id = p.id
+GROUP BY p.id, p.favorite_count
+HAVING p.favorite_count <> COUNT(f.id);`;
+  out.textContent = '一致性检查 SQL（在数据库里执行，应返回 0 行）：\n\n'
+    + '  USE secondhand_shop;\n'
+    + sql.split('\n').map((l) => '  ' + l).join('\n')
+    + '\n\n或者直接跑自动化脚本（它每次都做这项检查）：\n'
+    + '  node scripts\\s7-test.mjs\n\n'
+    + '为什么必须查：favorite_count 是冗余字段。一旦和 favorite 表对不上，'
+    + '页面上显示的「N 人想要」就是假的，而且取消收藏时可能减成负数。';
+  out.textContent += `\n\n当前 lastCount = ${lastCount ?? '(还没操作过)'}`;
+}
+
+async function recordView() {
+  const r = await call('POST', `/api/behaviors/view/${currentId()}`);
+  if (r?.status === 200) {
+    out.textContent += '\n\n✅ 已记录（注意：浏览自己的商品会被静默跳过，未登录也会跳过）';
+  }
+}
+
+function behaviorHint() {
+  out.textContent = '查看最近的行为记录（在数据库里执行）：\n\n'
+    + '  USE secondhand_shop;\n'
+    + '  SELECT id, user_id, product_id, behavior_type, behavior_time\n'
+    + '  FROM user_behavior ORDER BY id DESC LIMIT 10;\n\n'
+    + 'behavior_type 的含义：\n'
+    + '  1 = 浏览（商品详情接口自动记）\n'
+    + '  2 = 收藏\n'
+    + '  3 = 咨询（点「获取联系方式」）\n'
+    + '  4 = 取消收藏\n\n'
+    + '规则：未登录不记、浏览自己的商品不记、写失败不影响主流程。';
+}
+
+refreshStat();
+</script>
+</body>
+</html>

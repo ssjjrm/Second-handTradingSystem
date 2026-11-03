@@ -445,6 +445,66 @@ async function main() {
     check('卖家主页不含联系方式，只有 hasContact 和统计',
       sellerCheck.startsWith('clean|'), sellerCheck)
 
+    // ================= 11. S7 收藏 + 行为埋点 =================
+    console.log('\n[11] S7 验证页：收藏幂等 / 计数一致 / 四类行为')
+    await cdp.send('Page.navigate', { url: FRONT + '/verify/s7-favorite.html' })
+    await sleep(1500)
+
+    const s7Title = await cdp.eval('document.querySelector("h1")?.textContent || ""')
+    check('S7 验证页能加载', s7Title.includes('S7'), `"${s7Title.trim()}"`)
+
+    const favCheck = await cdp.eval(`(async () => {
+      // buyer01 登录
+      const lr = await fetch('/api/auth/login', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: 'buyer01', password: '123456' })
+      });
+      const lj = await lr.json();
+      localStorage.setItem('token', lj.data.token);
+      localStorage.setItem('user', JSON.stringify(lj.data.user));
+      const h = { Authorization: 'Bearer ' + lj.data.token };
+
+      // 找一件不是自己发的、在售的商品
+      const list = await (await fetch('/api/products?size=100')).json();
+      const target = list.data.records.find(p => p.sellerId !== lj.data.user.id && p.status === 1);
+      if (!target) return 'NO_TARGET';
+      const id = target.id;
+
+      // 先确保没收藏
+      await fetch('/api/favorites/' + id, { method: 'DELETE', headers: h });
+      const before = (await (await fetch('/api/products/' + id)).json()).data.favoriteCount;
+
+      // 收藏两次（验证幂等）
+      const r1 = await (await fetch('/api/favorites/' + id, { method: 'POST', headers: h })).json();
+      const r2 = await (await fetch('/api/favorites/' + id, { method: 'POST', headers: h })).json();
+
+      // 取消
+      const r3 = await (await fetch('/api/favorites/' + id, { method: 'DELETE', headers: h })).json();
+
+      return [id, before, r1.data.favoriteCount, r2.data.favoriteCount, r3.data.favoriteCount].join('|');
+    })()`)
+    const fv = favCheck.split('|').map((x, i) => (i === 0 ? x : Number(x)))
+    check('收藏后想要数 +1', fv[2] === fv[1] + 1, `${fv[1]} → ${fv[2]}`)
+    check('重复收藏保持幂等（不再增加）', fv[3] === fv[2], `${fv[2]} → ${fv[3]}`)
+    check('取消收藏后回到原值', fv[4] === fv[1], `${fv[3]} → ${fv[4]}`)
+
+    const behaviorCheck = await cdp.eval(`(async () => {
+      const h = { Authorization: 'Bearer ' + localStorage.getItem('token') };
+      const list = await (await fetch('/api/products?size=100')).json();
+      const target = list.data.records.find(p => p.sellerId !== 5 && p.status === 1);
+
+      // 制造四类行为
+      await fetch('/api/products/' + target.id, { headers: h });                 // 1 浏览
+      await fetch('/api/favorites/' + target.id, { method: 'POST', headers: h }); // 2 收藏
+      await fetch('/api/products/' + target.id + '/contact', { headers: h });     // 3 咨询
+      await fetch('/api/favorites/' + target.id, { method: 'DELETE', headers: h }); // 4 取消
+
+      const mine = await (await fetch('/api/favorites?size=100', { headers: h })).json();
+      const hasProduct = mine.data.records.some(x => x.product && x.product.statusText);
+      return mine.code + '|' + hasProduct;
+    })()`)
+    check('我的收藏返回嵌套商品信息', behaviorCheck === '200|true', behaviorCheck)
+
     ws.close()
   } finally {
     browser.kill()

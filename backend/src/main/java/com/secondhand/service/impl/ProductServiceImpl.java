@@ -25,6 +25,7 @@ import com.secondhand.mapper.ProductMapper;
 import com.secondhand.mapper.UserBehaviorMapper;
 import com.secondhand.mapper.UserMapper;
 import com.secondhand.service.ProductService;
+import com.secondhand.service.BehaviorService;
 import com.secondhand.service.assembler.ProductVoAssembler;
 import com.secondhand.util.UserContext;
 import com.secondhand.vo.ContactVO;
@@ -75,6 +76,9 @@ public class ProductServiceImpl implements ProductService {
 
     /** VO 组装（补分类名、卖家昵称、解析图片 JSON）—— 和后台共用同一份逻辑 */
     private final ProductVoAssembler assembler;
+
+    /** 行为埋点统一入口（内部已保证：未登录跳过、浏览自己商品跳过、失败不抛异常） */
+    private final BehaviorService behaviorService;
 
     // ==================================================================
     //  列表
@@ -172,11 +176,10 @@ public class ProductServiceImpl implements ProductService {
         // ⚠️ 这是本接口独有的副作用，别的接口调用 getProductById 不会触发。
         productMapper.incrementViewCount(id);
 
-        // 浏览行为埋点：登录了、而且不是自己的商品才记。
-        // 埋点失败不影响主流程（BR-B08），所以这里是"吞掉异常 + 打日志"。
-        if (currentUserId != null && !isOwner) {
-            recordBehavior(currentUserId, id, BehaviorType.VIEW);
-        }
+        // 浏览行为埋点：交给 BehaviorService 统一处理 ——
+        // 它内部会自己判断"未登录跳过"和"浏览自己的商品跳过"，
+        // 而且写入失败只打日志、不抛异常（BR-B08），不会影响这次详情请求。
+        behaviorService.recordView(id);
 
         // 卖家和分类各查一次，后面几处复用（不要在同一个方法里反复查同一个对象）
         User seller = userMapper.selectById(product.getSellerId());
@@ -478,8 +481,8 @@ public class ProductServiceImpl implements ProductService {
         // ⑥ 记录咨询行为。
         //    ⚠️ 埋点失败绝不能影响主流程（BR-B08）——
         //    用户要的是卖家的微信，不是"日志写成功了没有"。
-        //    所以这一步放在最后，而且 recordBehavior 内部已经 try-catch 吞掉异常。
-        recordBehavior(currentUserId, productId, BehaviorType.CONTACT);
+        //    record() 内部已经 try-catch 吞掉异常，这里不用再包一层。
+        behaviorService.record(currentUserId, productId, BehaviorType.CONTACT);
 
         // ⑦ 组装返回
         ContactVO vo = new ContactVO();
@@ -670,25 +673,5 @@ public class ProductServiceImpl implements ProductService {
                 .eq(Product::getSellerId, sellerId)
                 .eq(Product::getStatus, status));
         return count == null ? 0L : count;
-    }
-
-    /**
-     * 写一条行为流水。
-     *
-     * <p><b>整个方法被 try-catch 包住是有意的</b>：埋点是"锦上添花"，
-     * 用户要的是看商品详情。如果因为埋点表写失败就返回 500，
-     * 等于为了让日志完整牺牲了主业务 —— 这个取舍不划算。
-     */
-    private void recordBehavior(Integer userId, Integer productId, BehaviorType type) {
-        try {
-            UserBehavior behavior = new UserBehavior();
-            behavior.setUserId(userId);
-            behavior.setProductId(productId);
-            behavior.setBehaviorType(type.getCode());
-            userBehaviorMapper.insert(behavior);
-        } catch (Exception e) {
-            log.warn("行为埋点写入失败（不影响主流程）：userId={}, productId={}, type={}",
-                    userId, productId, type.getCode(), e);
-        }
     }
 }

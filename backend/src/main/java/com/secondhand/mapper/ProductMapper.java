@@ -28,4 +28,28 @@ public interface ProductMapper extends BaseMapper<Product> {
      */
     @Update("UPDATE product SET view_count = view_count + 1, update_time = update_time WHERE id = #{id}")
     int incrementViewCount(@Param("id") Integer id);
+
+    /**
+     * 「想要」数 +1。
+     *
+     * <p>和浏览量同理：用 SQL 原子自增，避免并发下"读出来 +1 再写回"丢失更新。
+     * {@code favorite_count} 是冗余字段（等于 favorite 表里该商品的行数），
+     * 好处是列表页不用 JOIN 就能显示"多少人想要"。
+     *
+     * <p>⚠️ 冗余字段的代价：每次收藏/取消都必须同步维护它，否则会和对不上。
+     * 项目里专门有一致性检查 SQL（见数据库脚本和验证页）。
+     */
+    @Update("UPDATE product SET favorite_count = favorite_count + 1, update_time = update_time WHERE id = #{id}")
+    int incrementFavoriteCount(@Param("id") Integer id);
+
+    /**
+     * 「想要」数 -1，<b>但绝不低于 0</b>。
+     *
+     * <p>{@code GREATEST(favorite_count - 1, 0)} 是为了兜住脏数据：
+     * 万一某次操作没配平（比如手工改过库），计数也不会变成负数 ——
+     * 负的"想要数"显示在页面上会非常刺眼，而且很难解释。
+     * 加了这个兜底，最坏情况是数字不动，而不是变成 -1。
+     */
+    @Update("UPDATE product SET favorite_count = GREATEST(favorite_count - 1, 0), update_time = update_time WHERE id = #{id}")
+    int decrementFavoriteCount(@Param("id") Integer id);
 }
