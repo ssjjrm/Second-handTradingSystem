@@ -20,6 +20,10 @@ import org.springframework.security.crypto.password.PasswordEncoder;
  *
  * <p>注意 {@code matches(明文, 密文)} 是唯一的校验方式，
  * **不能用 {@code equals} 比较** —— 因为每次 encode 结果都不一样。
+ *
+ * 无限多的输入映射到有限多的输出，必然有大量不同输入产生相同输出（碰撞）
+ * 登录时：用户再输入密码，用同样的规则重新算一遍，和库里存的哈希比对
+ *
  */
 @Configuration
 public class PasswordConfig {

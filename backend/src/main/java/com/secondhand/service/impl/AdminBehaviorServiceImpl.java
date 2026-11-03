@@ -45,7 +45,7 @@ import java.util.stream.Collectors;
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
+@RequiredArgsConstructor //Lombok 为所有 final 字段生成一个构造器
 public class AdminBehaviorServiceImpl implements AdminBehaviorService {
 
     private final UserBehaviorMapper userBehaviorMapper;
