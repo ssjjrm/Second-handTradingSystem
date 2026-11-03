@@ -24,8 +24,7 @@ import org.springframework.stereotype.Component;
  * <h3>两个来源，优先级</h3>
  *
  * <ol>
- *   <li><b>启动配置</b>：`application.yml` 里的 {@code app.review.enabled}，
- *       也可以用环境变量 {@code REVIEW_ENABLED=false} 覆盖（不改代码、不改配置文件）</li>
+ *   <li><b>启动配置</b>：`application.yml` 里的 {@code app.review.enabled}</li>
  *   <li><b>运行时开关</b>：{@code PUT /api/admin/settings/review?enabled=false}，
  *       管理员在后台点一下即可切换，<b>不用重启后端</b></li>
  * </ol>
